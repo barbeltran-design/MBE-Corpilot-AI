@@ -1,0 +1,129 @@
+{
+  "common": {
+    "appName": "MBE AI Copilot",
+    "download": "Descargar",
+    "continue": "Continuar",
+    "back": "Atrás",
+    "loading": "Cargando...",
+    "maturityLevel": {
+      "execution": "Ejecución",
+      "standard": "Estándar",
+      "control": "Control",
+      "optimization": "Optimización",
+      "excellence": "Excelencia",
+      "influencer": "Influencer"
+    }
+  },
+  "landing": {
+    "nav": {
+      "features": "Qué hace",
+      "agents": "Agentes IA",
+      "pricing": "Precios",
+      "login": "Iniciar sesión"
+    },
+    "hero": {
+      "eyebrow": "Con Gemini de Google Cloud",
+      "title": "Transforma tu PyME en una empresa de clase mundial con IA",
+      "subtitle": "5 agentes de IA especializados diagnostican tu negocio y te entregan planes, contratos y hojas de cálculo reales — no consejos genéricos.",
+      "ctaPrimary": "Crear cuenta gratis",
+      "ctaSecondary": "Ver video demo (2 min)",
+      "socialProof": "Basado en 153 prácticas de clase mundial de MBE Corp"
+    },
+    "agentsPreview": {
+      "title": "Tu Consejo de Administración de IA",
+      "subtitle": "Cada agente domina un área distinta de tu negocio"
+    }
+  },
+  "register": {
+    "title": "Crea tu cuenta gratis",
+    "subtitle": "Diagnóstico de madurez + 1 sesión con Babel AI, sin tarjeta de crédito",
+    "googleCta": "Continuar con Google",
+    "orDivider": "o con tu correo",
+    "fields": {
+      "fullName": "Nombre completo",
+      "fullNamePlaceholder": "Ej. María Fernández",
+      "email": "Correo electrónico",
+      "emailPlaceholder": "tu@empresa.com",
+      "password": "Contraseña",
+      "companyName": "Nombre de tu empresa",
+      "companyNamePlaceholder": "Ej. Panadería Fernández",
+      "industry": "Giro",
+      "industryOptions": {
+        "manufacturing": "Manufactura",
+        "services": "Servicios",
+        "commerce": "Comercio",
+        "tech": "Tecnología"
+      },
+      "size": "Tamaño de la empresa",
+      "sizeOptions": {
+        "s1": "1 a 5 empleados",
+        "s2": "6 a 20 empleados",
+        "s3": "21 a 50 empleados",
+        "s4": "Más de 50 empleados"
+      },
+      "country": "País",
+      "language": "Idioma"
+    },
+    "submit": "Crear cuenta gratis",
+    "terms": "Al continuar aceptas nuestros Términos y Aviso de Privacidad.",
+    "errors": {
+      "required": "Este campo es obligatorio",
+      "invalidEmail": "Correo electrónico inválido",
+      "minPassword": "La contraseña debe tener al menos 8 caracteres",
+      "generic": "Algo salió mal. Intenta de nuevo.",
+      "emailInUse": "Ya existe una cuenta con este correo."
+    }
+  },
+  "footer": {
+    "rights": "Todos los derechos reservados."
+  },
+  "assessment": {
+    "loading": "Cargando...",
+    "stepLabel": "Diagnóstico de madurez · Tema {current} de {total}",
+    "expectedEvidence": "Evidencia esperada:",
+    "answers": {
+      "yes": "Sí",
+      "partial": "Parcialmente",
+      "no": "No"
+    },
+    "back": "Atrás",
+    "next": "Siguiente",
+    "finish": "Ver resultados",
+    "finishing": "Guardando tu diagnóstico...",
+    "saveError": "No se pudo guardar tu diagnóstico. Verifica tu conexión e intenta de nuevo.",
+    "retry": "Reintentar"
+  },
+  "dashboard": {
+    "loading": "Cargando...",
+    "welcomeTitle": "Tu Dashboard",
+    "maturityScoreLabel": "% Madurez de tu empresa",
+    "maturityLevelLabel": "Nivel de madurez de tu empresa",
+    "radarTitle": "Nivel de madurez por tema",
+    "progressTitle": "% Avance por nivel",
+    "tableTitle": "Resumen por tema",
+    "colTema": "Tema",
+    "colScore": "% Madurez",
+    "colLevel": "Nivel",
+    "colAchieved": "Niveles superados",
+    "colInProgress": "En progreso",
+    "colPending": "Pendientes",
+    "colNextStep": "Próximo paso recomendado",
+    "totalRow": "Total (promedio de los 11 temas)",
+    "masteredLabel": "Nivel máximo alcanzado",
+    "retakeLink": "Repetir el diagnóstico",
+    "babelTitle": "Babel AI — tu arquitecto estratégico",
+    "babelBody": "Construye tu Plan de Negocio Estratégico Socioambiental paso a paso con Babel AI.",
+    "babelCta": "Hablar con Babel AI",
+    "loadError": "No encontramos un diagnóstico guardado en tu cuenta.",
+    "loadErrorCta": "Hacer el diagnóstico"
+  },
+  "babel": {
+    "title": "Babel AI",
+    "subtitle": "Tu Strategic Business Architect. Vamos a construir juntos tu Plan de Negocio Estratégico Socioambiental, fase por fase.",
+    "loading": "Cargando tu sesión con Babel...",
+    "loadingReply": "Babel está pensando...",
+    "placeholder": "Escribe tu respuesta...",
+    "send": "Enviar",
+    "approveButton": "Aprobar Fase {phase} y continuar",
+    "approveFinalButton": "Aprobar Fase 5 y finalizar",
+    "allPhasesDone": "¡Completaste las 6 fases con Babel AI! Escribe /compilar para armar tu Plan de Negocio Estratégico Socioambiental completo, con to
