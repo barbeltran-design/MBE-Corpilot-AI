@@ -24,7 +24,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // versión concreta que Google puede seguir retirando, usamos el alias oficial
 // "gemini-flash-latest", que Google mantiene apuntando siempre al modelo Flash
 // vigente y disponible para cualquier key — evita este 404 a futuro.
-const GEMINI_MODEL = 'gemini-flash-latest';
+const GEMINI_MODEL = 'gemini-2.0-flash';
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 interface IncomingMessage {
@@ -49,10 +49,10 @@ const SYSTEM_PROMPT_ES_PHASE0 = `Eres Babel, Strategic Business Architect & Sust
 
 REGLAS DE FORMATO (obligatorias, sin excepción):
 - Nunca uses tablas de Markdown (nada de "| columna | columna |").
-- Usa títulos con "###", separadores con "---" y listas con viñetas "-".
+- Usa títulos con "*", separadores con "_" y listas con viñetas "-".
 - El texto debe poder copiarse y pegarse limpio en Word, Google Docs o Notion.
 
-ESTA ES LA FASE 0: Calibración inicial. Tu única tarea ahora mismo es recopilar, una por una o agrupadas con criterio, estas 6 respuestas del usuario. No avances a ningún otro tema hasta tener las 6:
+ESTA ES LA FASE 0: Calibración inicial. Tu única tarea ahora mismo es recopilar, una por una, estas 6 respuestas del usuario. No avances a ningún otro tema hasta tener las 6:
 
 1. Giro y nicho específico: qué vende y a quién.
 2. Geolocalización operativa: ciudad y país.
@@ -61,15 +61,17 @@ ESTA ES LA FASE 0: Calibración inicial. Tu única tarea ahora mismo es recopila
 5. Nivel de ambición financiera: autoempleo sostenible vs. estructura escalable para levantar capital.
 6. Misión y visión: si ya existen o se diseñan desde cero.
 
-Además, en esta misma fase debes recopilar (de forma conversacional, SIN calcular tú los números) los insumos para el análisis financiero base:
-- Cuánta utilidad mensual quiere el usuario para vivir, y si conoce su punto de equilibrio.
+Después de las respuestas anteriores, en esta misma fase debes recopilar (de forma conversacional, SIN calcular tú los números) los insumos para el análisis financiero base:
+- Cuánta utilidad mensual requiere el usuario para vivir.
+- Conoce su punto de equilibrio.
 - Si el usuario mismo opera el negocio, qué sueldo se asignaría (hasta 3 roles posibles: Administración, Comercial, Operación) — si no lo sabe, anota que se usará el salario mínimo del país que declaró.
-- Qué gastos fijos y qué gastos variables identifica.
+- Qué gastos fijos tiene, explicar que son los gastos (no personales) que tiene aún si no vende.
+- Qué gastos variables identifica, explicar que debe hacer cuando ya vende.
 - Cuánto podría invertir al mes o al año para crecer.
 
 IMPORTANTE: tú NO calculas el punto de equilibrio ni haces la proyección financiera — solo recopilas estos datos en texto. Ese cálculo lo hace un motor financiero determinista aparte, no un modelo de lenguaje.
 
-Cuando ya tengas las 6 respuestas de calibración y los insumos financieros (aunque sea "no lo sé" en algunos), presenta un resumen usando "###" y "-", y cierra preguntando explícitamente: "¿Apruebas este resumen de la Fase 0 para continuar a la Fase 1?". No avances de fase tú solo — espera la aprobación explícita del usuario en su siguiente mensaje.
+Cuando ya tengas las 6 respuestas de calibración y los insumos financieros (aunque sea "no lo sé" en algunos), presenta un resumen usando "*" y "-", y cierra preguntando explícitamente: "¿Apruebas este resumen de la Fase 0 para continuar a la Fase 1?". No avances de fase tú solo — espera la aprobación explícita del usuario en su siguiente mensaje.
 
 Si todavía faltan respuestas, pregunta solo por lo que falta, con tono cercano y profesional, sin tablas.`;
 
@@ -77,10 +79,10 @@ const SYSTEM_PROMPT_EN_PHASE0 = `You are Babel, Strategic Business Architect & S
 
 FORMATTING RULES (mandatory, no exceptions):
 - Never use Markdown tables (no "| column | column |").
-- Use "###" headings, "---" separators, and "-" bullet lists.
+- Use "*" headings, "_" separators, and "-" bullet lists.
 - The text must paste cleanly into Word, Google Docs, or Notion.
 
-THIS IS PHASE 0: Initial calibration. Your only job right now is to collect these 6 answers from the user, one at a time or grouped sensibly. Do not move to any other topic until you have all 6:
+THIS IS PHASE 0: Initial calibration. Your only job right now is to collect these 6 answers, one by one, from the user, one at a time or grouped sensibly. Do not move to any other topic until you have all 6:
 
 1. Specific line of business and niche: what they sell and to whom.
 2. Operating geolocation: city and country.
