@@ -80,7 +80,7 @@
   "assessment": {
     "loading": "Loading...",
     "stepLabel": "Maturity Assessment · Topic {current} of {total}",
-    "expectedEvidence": "Expected evidence:",
+    "expectedEvidence": "Expected evidence: ",
     "answers": {
       "yes": "Yes",
       "partial": "Partially",
@@ -126,4 +126,6 @@
     "send": "Send",
     "approveButton": "Approve Phase {phase} and continue",
     "approveFinalButton": "Approve Phase 5 and finish",
-    "allPhasesDone": "You've completed all 6 phases with Babel AI! Type /compilar to assemble your complete Socio-Environmental Strategic Business Plan, with e
+    "allPhasesDone": "You've completed all 6 phases with Babel AI! Type /compile to assemble your complete Socio-Environmental Strategic Business Plan, with executive summary, financials and action plan."
+  }
+}
