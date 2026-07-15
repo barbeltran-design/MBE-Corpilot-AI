@@ -80,7 +80,7 @@
   "assessment": {
     "loading": "Cargando...",
     "stepLabel": "Diagnóstico de madurez · Tema {current} de {total}",
-    "expectedEvidence": "Evidencia esperada:",
+    "expectedEvidence": "Evidencia esperada: ",
     "answers": {
       "yes": "Sí",
       "partial": "Parcialmente",
@@ -126,4 +126,6 @@
     "send": "Enviar",
     "approveButton": "Aprobar Fase {phase} y continuar",
     "approveFinalButton": "Aprobar Fase 5 y finalizar",
-    "allPhasesDone": "¡Completaste las 6 fases con Babel AI! Escribe /compilar para armar tu Plan de Negocio Estratégico Socioambiental completo, con to
+    "allPhasesDone": "¡Completaste las 6 fases con Babel AI! Escribe /compilar para armar tu Plan de Negocio Estratégico Socioambiental completo."
+  }
+}
