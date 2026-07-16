@@ -1,6 +1,7 @@
 import { NextIntlClientProvider, useMessages } from 'next-intl';
 import { notFound } from 'next/navigation';
 import { locales } from '@/i18n/routing';
+import '@/app/globals.css'; // ← ESTA LÍNEA ES LA QUE FALTA
 
 export function generateStaticParams() {
   return locales.map((locale) => ({ locale }));
