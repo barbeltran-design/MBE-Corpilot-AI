@@ -454,24 +454,39 @@ export default function BabelPage() {
           <div dangerouslySetInnerHTML={{ __html: currentQuestion.question }} />
         </div>
         
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleAnswerQuestion();
-          }}
-          className="space-y-3"
-        >
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={currentQuestion.placeholder}
-            disabled={sending}
-            className="w-full"
-          />
-          <Button type="submit" disabled={sending || !input.trim()} className="w-full">
-            {sending ? 'Enviando...' : currentQuestionIndex === questions.length - 1 ? 'Finalizar Fase 0' : 'Siguiente'}
-          </Button>
-        </form>
+<form
+  onSubmit={(e) => {
+    e.preventDefault();
+    if (input.trim() === '/compilar' && allPhasesDone) {
+     handleCompile();
+    } else if (!waitingForPhase0Answer) {
+      sendMessage(input);
+    } else {
+      handleSendAnswer();
+    }
+  }}
+  className="flex gap-2 items-end"
+>
+  <textarea
+    value={input}
+    onChange={(e) => setInput(e.target.value)}
+    onKeyDown={(e) => {
+      // Enter sin Shift = NO envía (permite nueva línea)
+      // Shift+Enter = nueva línea explícita
+      // El envío SOLO ocurre con el botón
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault(); // Evita el submit automático
+      }
+    }}
+    placeholder={waitingForPhase0Answer ? "Escribe tu respuesta..." : t('placeholder')}
+    disabled={sending || awaitingApproval}
+    rows={3}
+    className="flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 min-h-[80px]"
+  />
+  <Button type="submit" disabled={sending || awaitingApproval || !input.trim()} className="mb-0">
+    {t('send')}
+  </Button>
+</form>
       </Card>
 
       <div className="text-center text-sm text-slate-500">
