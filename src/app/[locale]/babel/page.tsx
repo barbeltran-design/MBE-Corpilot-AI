@@ -138,6 +138,7 @@ export default function BabelPage() {
   const [error, setError] = React.useState<string | null>(null);
   
   // Estado para preguntas una por una
+  const [waitingForPhase0Answer, setWaitingForPhase0Answer] = React.useState(false);
   const [currentQuestionIndex, setCurrentQuestionIndex] = React.useState(0);
   const [phase0Answers, setPhase0Answers] = React.useState<Record<string, string>>({});
   const [isPhase0Complete, setIsPhase0Complete] = React.useState(false);
