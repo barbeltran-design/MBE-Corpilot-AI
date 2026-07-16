@@ -108,6 +108,7 @@ export interface SessionDoc {
   // Solo se usa cuando agentId === 'babel'.
   currentPhase?: number;
   phases?: BabelPhaseRecord[];
+  phaseData?: Record<string, any>;
 }
 
 /** Firestore collection: deliverables/{deliverableId} */
