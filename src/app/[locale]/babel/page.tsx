@@ -91,7 +91,7 @@ export default function BabelPage() {
       const firstQuestion = questions[0];
       const questionMsg: ChatMessage = {
         role: 'assistant',
-        content: `¡Hola! Soy **Babel**, Strategic Business Architect & Sustainability Lead de MBE Corp.\n\nPara iniciar con el pie derecho, te haré **10 preguntas clave** una por una. Responde con calma.\n\n**Nota:** Usa la tecla Enter para bajar de renglón. El mensaje solo se envía cuando presionas el botón "Enviar".\n\n---\n\n${firstQuestion}`,
+        content: `¡Hola! Soy **Babel**, Strategic Business Architect & Sustainability Lead de MBE Corp.\n\nPara iniciar con el pie derecho, te haré **10 preguntas clave** una por una. Responde con calma.\n\n**Nota:** Usa la tecla Enter para bajar de renglón. El mensaje solo se envía cuando presionas el botón "Enviar".\n\n---\n\n${firstQuestion.question}`,
         timestamp: Timestamp.now(),
       };
       setSession(prev => prev ? { ...prev, messages: [questionMsg] } : prev);
@@ -180,7 +180,7 @@ export default function BabelPage() {
       const nextQuestion = questions[nextIndex];
       const nextQuestionMsg: ChatMessage = {
         role: 'assistant',
-        content: nextQuestion,
+        content: nextQuestion.question, // <-- CORREGIDO: .question
         timestamp: Timestamp.now(),
       };
       
