@@ -29,7 +29,7 @@ const PHASE_0_QUESTIONS = {
     { key: 'utilidad_deseada', question: '### 7. Utilidad mensual deseada\n\n¿Cuánto dinero neto quisieras que sobrara de ganancias mensualmente para vivir? (en tu moneda local)' },
     { key: 'sueldo_founder', question: '### 8. Sueldo del fundador\n\nSi vas a operar el negocio, ¿qué sueldo te asignarías para cubrir hasta 3 roles, que sería el mismo que le pagarías a otra persona por hacer cada rol? (Administración, Comercial, Operación)' },
     { key: 'gastos_fijos', question: '### 9. Gastos fijos\n\n¿Qué gastos fijos tienes que pagar aunque no vendas (renta, servicios, software)?' },
-    { key: 'gastos_variables', question: '### 10.  Gastos variables\n\n¿Qué gastos variables tienes que pagar relacionados a entregar tu producto o servicio (materia prima, comisiones)?' }
+    { key: 'gastos_variables', question: '### 10. Gastos variables\n\n¿Qué gastos variables tienes que pagar relacionados a entregar tu producto o servicio (materia prima, comisiones)?' }
   ],
   en: [
     { key: 'giro', question: '### 1. Business Type and Niche\n\nWhat exactly do you sell and who is it for?' },
@@ -41,7 +41,8 @@ const PHASE_0_QUESTIONS = {
     { key: 'utilidad_deseada', question: '### 7. Desired Monthly Profit\n\nHow much net profit would you like to have left over each month to live on? (in your local currency)' },
     { key: 'sueldo_founder', question: '### 8. Founder\'s Salary\n\nIf you\'re going to run the business, what salary would you assign yourself to cover up to 3 roles, which would be the same as what you would pay another person to perform each role? (Administration, Commercial, Operations)' },
     { key: 'gastos_fijos', question: '### 9. Fixed Costs\n\nWhat fixed costs (rent, services, software) do you pay even if you don´t sale anything?' },
-    { key: 'gastos_variables', question: '### 10. Variable Costs\n\nWhat variable costs (raw materials, commissions) do you identify to deliver your product or service?' },
+    { key: 'gastos_variables', question: '### 10. Variable Costs\n\nWhat variable costs (raw materials, commissions) do you identify to deliver your product or service?' }
+  ]
 };
 
 export default function BabelPage() {
