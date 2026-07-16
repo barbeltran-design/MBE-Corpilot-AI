@@ -21,28 +21,27 @@ import type { ChatMessage, SessionDoc } from '@/types/firestore';
 const PHASE_0_QUESTIONS = {
   es: [
     { key: 'giro', question: '### 1. Giro y nicho específico\n\n¿Qué vendes exactamente y a quién va dirigido?' },
-    { key: 'ubicacion', question: '### 2. Geolocalización operativa\n\n¿En qué ciudad y país operará el negocio?' },
-    { key: 'madurez', question: '### 3. Madurez actual\n\n¿Es una idea en papel, un MVP ya validado, o un negocio en marcha buscando escalar?' },
-    { key: 'recursos', question: '### 4. Recursos disponibles\n\n¿Con qué activos, canales de venta o equipo humano cuentas actualmente?' },
+    { key: 'ubicacion', question: '### 2. Ubicación operativa\n\n¿En qué ciudad, estado y país operará el negocio?' },
+    { key: 'madurez', question: '### 3. Madurez actual\n\n¿Es una idea en papel, un producto o servicio ya validado, o un negocio en marcha buscando escalar?' },
+    { key: 'recursos', question: '### 4. Recursos disponibles\n\n¿Con qué recursos materiales, humanos, intelectuales (marca, procesos, patentes) y financieros cuentas actualmente?' },
     { key: 'ambicion', question: '### 5. Nivel de ambición financiera\n\n¿Buscas crear un autoempleo sostenible o una estructura escalable para levantar capital de inversionistas?' },
-    { key: 'mision_vision', question: '### 6. Misión y visión\n\n¿Ya las tienes definidas o prefieres que las diseñemos desde cero?' },
-    { key: 'utilidad_deseada', question: '### 7. Utilidad mensual deseada\n\n¿Cuánto dinero neto quisieras recibir mensualmente para vivir? (en tu moneda local)' },
-    { key: 'sueldo_founder', question: '### 8. Sueldo del fundador\n\nSi vas a operar el negocio, ¿qué sueldo te asignarías para cubrir hasta 3 roles? (Administración, Comercial, Operación)' },
-    { key: 'gastos', question: '### 9. Gastos fijos y variables\n\n¿Qué gastos fijos (renta, servicios, software) y gastos variables (materia prima, comisiones) identificas?' },
-    { key: 'inversion', question: '### 10. Capacidad de inversión\n\n¿Cuánto capital estimas que podrías invertir al mes o al año para hacer crecer el negocio?' }
+    { key: 'mision_vision', question: '### 6. Propósito Común, Misión y visión\n\n¿Ya las tienes definidas o prefieres que las diseñemos desde cero?' },
+    { key: 'utilidad_deseada', question: '### 7. Utilidad mensual deseada\n\n¿Cuánto dinero neto quisieras que sobrara de ganancias mensualmente para vivir? (en tu moneda local)' },
+    { key: 'sueldo_founder', question: '### 8. Sueldo del fundador\n\nSi vas a operar el negocio, ¿qué sueldo te asignarías para cubrir hasta 3 roles, que sería el mismo que le pagarías a otra persona por hacer cada rol? (Administración, Comercial, Operación)' },
+    { key: 'gastos_fijos', question: '### 9. Gastos fijos\n\n¿Qué gastos fijos tienes que pagar aunque no vendas (renta, servicios, software)?' },
+    { key: 'gastos_variables', question: '### 10.  Gastos variables\n\n¿Qué gastos variables tienes que pagar relacionados a entregar tu producto o servicio (materia prima, comisiones)?' }
   ],
   en: [
     { key: 'giro', question: '### 1. Business Type and Niche\n\nWhat exactly do you sell and who is it for?' },
-    { key: 'ubicacion', question: '### 2. Operational Location\n\nIn which city and country will the business operate?' },
-    { key: 'madurez', question: '### 3. Current Maturity\n\nIs it an idea on paper, a validated MVP, or an ongoing business seeking to scale?' },
-    { key: 'recursos', question: '### 4. Available Resources\n\nWhat assets, sales channels, or human resources do you currently have?' },
+    { key: 'ubicacion', question: '### 2. Operational Location\n\nIn which city, state and country will the business operate?' },
+    { key: 'madurez', question: '### 3. Current Maturity\n\nIs it an idea on paper, a validated product or service, or an ongoing business seeking to scale?' },
+    { key: 'recursos', question: '### 4. Available Resources\n\nWhat material, human, intelectual and financial resources do you currently have?' },
     { key: 'ambicion', question: '### 5. Financial Ambition Level\n\nAre you looking to create sustainable self-employment or a scalable structure to raise capital from investors?' },
-    { key: 'mision_vision', question: '### 6. Mission and Vision\n\nDo you already have them defined or would you prefer us to design them from scratch?' },
-    { key: 'utilidad_deseada', question: '### 7. Desired Monthly Profit\n\nHow much net money would you like to receive monthly to live? (in your local currency)' },
-    { key: 'sueldo_founder', question: '### 8. Founder\'s Salary\n\nIf you\'re going to run the business, what salary would you assign yourself to cover up to 3 roles? (Administration, Commercial, Operations)' },
-    { key: 'gastos', question: '### 9. Fixed and Variable Costs\n\nWhat fixed costs (rent, services, software) and variable costs (raw materials, commissions) do you identify?' },
-    { key: 'inversion', question: '### 10. Investment Capacity\n\nHow much capital do you estimate you could invest per month or per year to grow the business?' }
-  ]
+    { key: 'mision_vision', question: '### 6. Shared Goal, Mission and Vision\n\nDo you already have them defined or would you prefer us to design them from scratch?' },
+    { key: 'utilidad_deseada', question: '### 7. Desired Monthly Profit\n\nHow much net profit would you like to have left over each month to live on? (in your local currency)' },
+    { key: 'sueldo_founder', question: '### 8. Founder\'s Salary\n\nIf you\'re going to run the business, what salary would you assign yourself to cover up to 3 roles, which would be the same as what you would pay another person to perform each role? (Administration, Commercial, Operations)' },
+    { key: 'gastos_fijos', question: '### 9. Fixed Costs\n\nWhat fixed costs (rent, services, software) do you pay even if you don´t sale anything?' },
+    { key: 'gastos_variables', question: '### 10. Variable Costs\n\nWhat variable costs (raw materials, commissions) do you identify to deliver your product or service?' },
 };
 
 export default function BabelPage() {
