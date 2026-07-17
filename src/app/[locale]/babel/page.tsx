@@ -11,6 +11,7 @@ import {
   saveBabelMessages,
   approveBabelPhase,
   compileApprovedPhases,
+  resetBabelSession,
 } from '@/lib/babel-session';
 import { BABEL_IMPLEMENTED_PHASES, babelApprovalMarker } from '@/lib/babel-constants';
 import { createCompiledPlanDeliverable } from '@/lib/deliverables';
@@ -329,7 +330,28 @@ export default function BabelPage() {
     await signOut(auth);
     router.push(`/${locale}`);
   }
-
+  async function handleReset() {
+    if (!uid) return;
+    const confirmMsg =
+      locale === 'en'
+        ? 'This will erase all progress in this session and start over from scratch. This cannot be undone. Continue?'
+        : 'Esto borrará todo el progreso de esta sesión y empezará de nuevo desde cero. No se puede deshacer. ¿Continuar?';
+    if (!window.confirm(confirmMsg)) return;
+    setSending(true);
+    setError(null);
+    try {
+      const fresh = await resetBabelSession(uid, locale);
+      setSession(fresh);
+      setInput('');
+      setCurrentQuestionIndex(0);
+      setPhase0Answers({});
+      setIsPhase0Complete(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al reiniciar');
+    } finally {
+      setSending(false);
+    }
+  }
   if (!session) {
     return <div className="flex min-h-screen items-center justify-center text-slate-500">{t('loading')}</div>;
   }
@@ -347,7 +369,10 @@ export default function BabelPage() {
             <h1 className="text-xl font-semibold text-slate-900">{t('title')}</h1>
             <p className="text-sm text-slate-500">Fase 0: Calibración Inicial</p>
           </div>
-          <Button onClick={handleLogout} variant="outline" size="sm">Cerrar sesión</Button>
+          <div className="flex gap-2">
+           <Button onClick={handleReset} disabled={sending} variant="outline" size="sm">Empezar de nuevo</Button>
+           <Button onClick={handleLogout} variant="outline" size="sm">Cerrar sesión</Button>
+          </div>
         </div>
 
         {/* Historial de respuestas previas */}
@@ -413,7 +438,10 @@ export default function BabelPage() {
           <h1 className="text-xl font-semibold text-slate-900">{t('title')}</h1>
           <p className="text-sm text-slate-500">{(session as any).phaseData?.topic || t('subtitle')}</p>
         </div>
-        <Button onClick={handleLogout} variant="outline" size="sm">Cerrar sesión</Button>
+        <div className="flex gap-2">
+         <Button onClick={handleReset} disabled={sending} variant="outline" size="sm">Empezar de nuevo</Button>
+         <Button onClick={handleLogout} variant="outline" size="sm">Cerrar sesión</Button>
+        </div>
       </div>
 
       <Card className="flex-1 space-y-3 overflow-y-auto p-4 min-h-[60vh]">
