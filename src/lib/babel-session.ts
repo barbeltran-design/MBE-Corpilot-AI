@@ -87,3 +87,32 @@ export function compileApprovedPhases(session: SessionDoc): string {
     .map((p) => p.summary)
     .join('\n\n---\n\n');
 }
+/**
+ * Reinicia por completo la sesión de Babel: borra todos los mensajes, fases
+ * aprobadas y el avance de fase, y crea el documento desde cero como si el
+ * usuario nunca hubiera empezado. A diferencia de getOrCreateBabelSession,
+ * esta función SIEMPRE sobreescribe el documento existente (setDoc sin
+ * merge), así que no queda nada de la información anterior.
+ */
+export async function resetBabelSession(
+  uid: string,
+  language: 'es' | 'en'
+): Promise<SessionDoc> {
+  const db = getFirebaseDb();
+  const ref = doc(db, 'sessions', babelSessionId(uid));
+  const topics = babelPhaseTopics(language);
+  const fresh: SessionDoc = {
+    uid,
+    sessionId: babelSessionId(uid),
+    agentId: 'babel',
+    month: 1,
+    week: 1,
+    topic: topics[0],
+    createdAt: serverTimestamp() as SessionDoc['createdAt'],
+    messages: [],
+    currentPhase: 0,
+    phases: [],
+  };
+  await setDoc(ref, fresh);
+  return fresh;
+}
