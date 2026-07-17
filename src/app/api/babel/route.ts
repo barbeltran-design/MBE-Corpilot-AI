@@ -17,24 +17,26 @@ import { NextRequest, NextResponse } from 'next/server';
 // ---------------------------------------------------------------------------
 
 // Proveedores de IA con fallback.
-// Si Gemini falla (cuota agotada, modelo no disponible, error transitorio),
-// se intenta con Groq, luego OpenRouter automáticamente.
 //
-// Gemini (gratis, cuota limitada):
-//   API key: https://aistudio.google.com/apikey
-//   Por defecto usa gemini-2.5-flash (2026).
-// Nivel 1 — Groq (completamente gratis, 30 req/min):
-//   API key: https://console.groq.com
-//   Modelo: llama-3.3-70b-versatile
+// Nivel 1 — Groq (gratis, 30 req/min):
+//   API key: console.groq.com | Modelo: llama-3.3-70b-versatile
 // Nivel 2 — OpenRouter (modelos gratuitos):
-//   API key: https://openrouter.ai/keys
-//   Modelo: qwen/qwen3-next-80b-a3b-instruct:free (262K contexto)
+//   API key: openrouter.ai/keys | Modelo: meta-llama/llama-3.3-70b-instruct:free
+// Nivel 3 — Gemini (cuota limitada):
+//   API key: aistudio.google.com/apikey | Modelo: gemini-2.5-flash
+// Nivel 4 — 9Router (router local, requiere túnel o VPS):
+//   npm install -g 9router && 9router | Endpoint: http://localhost:20128/v1
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 const FALLBACK_ENDPOINT = process.env.FALLBACK_ENDPOINT || 'https://api.groq.com/openai/v1/chat/completions';
 const FALLBACK_MODEL = process.env.FALLBACK_MODEL || 'llama-3.3-70b-versatile';
 const TERTIARY_ENDPOINT = process.env.TERTIARY_ENDPOINT || 'https://openrouter.ai/api/v1/chat/completions';
 const TERTIARY_MODEL = process.env.TERTIARY_MODEL || 'meta-llama/llama-3.3-70b-instruct:free';
+// 9Router — proxy local con 40+ providers gratuitos.
+// Configura ROUTER_ENDPOINT con la URL pública de tu 9Router (túnel o VPS).
+// Ejemplo: https://tu-tunel.cloudflare.dev/v1
+const ROUTER_ENDPOINT = process.env.ROUTER_ENDPOINT || 'http://localhost:20128/v1';
+const ROUTER_MODEL = process.env.ROUTER_MODEL || 'kr/claude-sonnet-4.5';
 
 interface IncomingMessage {
   role: 'user' | 'assistant';
@@ -630,17 +632,26 @@ export async function POST(req: NextRequest) {
       if (result) return NextResponse.json(result);
     }
 
-    // 3. Gemini (último recurso)
+    // 3. Gemini
     if (process.env.GEMINI_API_KEY) {
-      const result = await tryGemini(messages, lang, currentPhase, diagnostics);
+      const result = await tryGemini(compactMessages, lang, currentPhase, diagnostics);
       if (result) return NextResponse.json(result);
     }
 
-    // 4. Todos fallaron — devolver diagnóstico
+    // 4. 9Router (proxy local con túnel, o VPS)
+    const resultRouter = await tryOpenAICompatible(
+      compactMessages, lang, currentPhase,
+      ROUTER_ENDPOINT, ROUTER_MODEL,
+      process.env.ROUTER_API_KEY || 'no-key-needed', '9Router', diagnostics,
+    );
+    if (resultRouter) return NextResponse.json(resultRouter);
+
+    // 5. Todos fallaron — devolver diagnóstico
     const configured = [
       process.env.FALLBACK_API_KEY && 'Groq',
       process.env.TERTIARY_API_KEY && 'OpenRouter',
       process.env.GEMINI_API_KEY && 'Gemini',
+      process.env.ROUTER_ENDPOINT && '9Router',
     ].filter(Boolean);
 
     if (configured.length === 0) {
