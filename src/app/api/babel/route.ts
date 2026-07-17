@@ -32,7 +32,7 @@ import { NextRequest, NextResponse } from 'next/server';
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 const FALLBACK_ENDPOINT = process.env.FALLBACK_ENDPOINT || 'https://api.groq.com/openai/v1/chat/completions';
-const FALLBACK_MODEL = process.env.FALLBACK_MODEL || 'llama-3.1-8b-instant';
+const FALLBACK_MODEL = process.env.FALLBACK_MODEL || 'llama-3.3-70b-versatile';
 const TERTIARY_ENDPOINT = process.env.TERTIARY_ENDPOINT || 'https://openrouter.ai/api/v1/chat/completions';
 const TERTIARY_MODEL = process.env.TERTIARY_MODEL || 'meta-llama/llama-3.3-70b-instruct:free';
 
@@ -47,6 +47,11 @@ interface BabelRequestBody {
   // Fase actual de la conversación (0-5). El cliente la manda con
   // session.currentPhase. Si no viene o es inválida, se asume 0 por seguridad.
   phase?: number;
+  // Fase 0: la última pregunta envía phase0Complete=true + phase0Data con
+  // el resumen de respuestas, para que la API construya un payload compacto
+  // en vez de reenviar todo el historial (que excede los TPM gratuitos).
+  phase0Complete?: boolean;
+  phase0Data?: Record<string, string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -575,11 +580,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Body inválido: se esperaba JSON.' }, { status: 400 });
     }
 
-    const { messages, language, phase } = body;
+    const { messages, language, phase, phase0Complete, phase0Data } = body;
     const lang: 'es' | 'en' = language === 'en' ? 'en' : 'es';
     const currentPhase = phase ?? 0;
 
-    if (!Array.isArray(messages) || messages.length === 0) {
+    // Fase 0: si el frontend manda phase0Complete, construimos un payload
+    // compacto con solo el resumen de respuestas, en vez de todo el historial
+    // (que excede los ~10k tokens y provoca rate-limits 429/413).
+    let compactMessages = messages;
+    if (phase0Complete && phase0Data) {
+      const summary = Object.entries(phase0Data)
+        .map(([key, value]) => `- ${key}: ${value}`)
+        .join('\n');
+      const langLabel = lang === 'en' ? 'en' : 'es';
+      const intro = langLabel === 'en'
+        ? 'Phase 0 completed. Here are my business answers:'
+        : 'Fase 0 completada. Estas son mis respuestas del negocio:';
+      compactMessages = [
+        { role: 'user', content: `${intro}\n\n${summary}` },
+      ];
+    }
+
+    if (!Array.isArray(compactMessages) || compactMessages.length === 0) {
       return NextResponse.json(
         { error: 'Se requiere "messages": un arreglo con al menos un mensaje { role, content }.' },
         { status: 400 },
@@ -588,7 +610,7 @@ export async function POST(req: NextRequest) {
 
     // 1. Groq (más fiable, gratis, 30 req/min)
     const resultGroq = await tryOpenAICompatible(
-      messages, lang, currentPhase,
+      compactMessages, lang, currentPhase,
       FALLBACK_ENDPOINT, FALLBACK_MODEL,
       process.env.FALLBACK_API_KEY, 'Groq', diagnostics,
     );
@@ -596,11 +618,17 @@ export async function POST(req: NextRequest) {
 
     // 2. OpenRouter + Qwen3 (gratis)
     const resultTertiary = await tryOpenAICompatible(
-      messages, lang, currentPhase,
+      compactMessages, lang, currentPhase,
       TERTIARY_ENDPOINT, TERTIARY_MODEL,
       process.env.TERTIARY_API_KEY, 'OpenRouter', diagnostics,
     );
     if (resultTertiary) return NextResponse.json(resultTertiary);
+
+    // 3. Gemini (último recurso)
+    if (process.env.GEMINI_API_KEY) {
+      const result = await tryGemini(compactMessages, lang, currentPhase, diagnostics);
+      if (result) return NextResponse.json(result);
+    }
 
     // 3. Gemini (último recurso)
     if (process.env.GEMINI_API_KEY) {
