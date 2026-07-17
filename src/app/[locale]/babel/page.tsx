@@ -18,7 +18,7 @@ import { BABEL_IMPLEMENTED_PHASES, babelApprovalMarker } from '@/lib/babel-const
 import { createCompiledPlanDeliverable } from '@/lib/deliverables';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+
 import type { BabelPhaseRecord, ChatMessage, SessionDoc } from '@/types/firestore';
 
 // Preguntas de la Fase 0 (una por una)
@@ -62,10 +62,7 @@ export default function BabelPage() {
   const retryRef = React.useRef<(() => Promise<void>) | null>(null);
   const [editingMessageIndex, setEditingMessageIndex] = React.useState<number | null>(null);
   const [editContent, setEditContent] = React.useState('');
-  const [showPhasesPanel, setShowPhasesPanel] = React.useState(false);
-  const [editingPhase, setEditingPhase] = React.useState<number | null>(null);
-  const [editPhaseContent, setEditPhaseContent] = React.useState('');
-  const [expandedPhases, setExpandedPhases] = React.useState<Set<number>>(new Set());
+
   const [chatExpanded, setChatExpanded] = React.useState<Set<number>>(new Set());
   const [compiling, setCompiling] = React.useState(false);
   const [showManualEditor, setShowManualEditor] = React.useState(false);
@@ -375,6 +372,7 @@ export default function BabelPage() {
       await upsertCompiledPlan(finalMessages, refreshed.phases);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error generico');
+      setShowManualEditor(true);
       const refreshed = await getOrCreateBabelSession(uid, locale);
       setSession(refreshed);
     } finally {
@@ -781,7 +779,7 @@ export default function BabelPage() {
         </div>
       )}
 
-      {showManualEditor && (
+      {showManualEditor && !awaitingApproval && (
         <Card className="p-4 space-y-2">
           <p className="text-sm font-medium text-slate-700">Escribe tu conclusion para la Fase {currentPhase} manualmente:</p>
           <textarea
@@ -806,97 +804,9 @@ export default function BabelPage() {
 
       <div className="flex flex-col gap-2">
         {awaitingApproval && editingMessageIndex === null && !showManualEditor && (
-          <div className="flex flex-col gap-2">
-            <div className="flex gap-2">
-              <button
-                onClick={function () { setShowPhasesPanel(!showPhasesPanel); }}
-                className="text-xs font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900"
-              >
-                {showPhasesPanel ? 'Ocultar etapas' : 'Ver etapas' + ((session.phases?.length ?? 0) > 0 ? ' (' + String(session.phases?.length) + ')' : '')}
-              </button>
-              <Button
-                onClick={function () { setShowManualEditor(true); }}
-                disabled={sending}
-                variant="outline"
-                className="flex-1"
-              >
-                Escribir propio
-              </Button>
-              <Button onClick={function () { handleApprove(); }} disabled={sending} className="flex-1">
-                {allPhasesDone ? t('approveFinalButton') : t('approveButton', { phase: currentPhase })}
-              </Button>
-            </div>
-            {showPhasesPanel && (
-              <Card className="p-4 space-y-4 max-h-[50vh] overflow-y-auto">
-                {[...(session.phases ?? [])].sort(function (a, b) { return a.phase - b.phase; }).map(function (p) {
-                  const isExpanded = expandedPhases.has(p.phase);
-                  return (
-                    <div key={p.phase} className="border rounded-lg p-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-sm font-semibold text-slate-700">Fase {p.phase}</h3>
-                        <button
-                          onClick={function () {
-                            setExpandedPhases(function (prev) {
-                              const next = new Set(prev);
-                              if (next.has(p.phase)) { next.delete(p.phase); } else { next.add(p.phase); }
-                              return next;
-                            });
-                          }}
-                          className="text-slate-400 hover:text-slate-600 transition-colors"
-                        >
-                          {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                        </button>
-                      </div>
-                      {editingPhase === p.phase ? (
-                        <div className="space-y-2">
-                          <textarea
-                            value={editPhaseContent}
-                            onChange={function (e) { setEditPhaseContent(e.target.value); }}
-                            rows={8}
-                            className="w-full resize-y rounded border border-blue-300 bg-white p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          />
-                          <div className="flex gap-2">
-                            <Button size="sm" variant="outline" onClick={function () { setEditingPhase(null); setEditPhaseContent(''); }}>Cancelar</Button>
-                            <Button size="sm" onClick={async function () {
-                              if (!uid) return;
-                              try {
-                                await updateBabelPhaseSummary(uid, p.phase, editPhaseContent);
-                                const refreshed = await getOrCreateBabelSession(uid, locale);
-                                setEditingPhase(null);
-                                setEditPhaseContent('');
-                                setSession(refreshed);
-                                await upsertCompiledPlan(refreshed.messages, refreshed.phases);
-                              } catch (e) {
-                                setError(e instanceof Error ? e.message : 'Error al guardar');
-                              }
-                            }}>Guardar cambios</Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div>
-                          <div className={'text-xs text-slate-600 whitespace-pre-wrap mb-2 ' + (isExpanded ? '' : 'max-h-40 overflow-y-auto')}>
-                            {isExpanded ? p.summary : (p.summary.slice(0, 500) + (p.summary.length > 500 ? '...' : ''))}
-                          </div>
-                          <button
-                            onClick={function () {
-                              setEditingPhase(p.phase);
-                              setEditPhaseContent(p.summary);
-                            }}
-                            className="text-xs font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900"
-                          >
-                            Editar
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-                {(session.phases?.length ?? 0) === 0 && (
-                  <p className="text-sm text-slate-500 text-center">No hay etapas aprobadas aun.</p>
-                )}
-              </Card>
-            )}
-          </div>
+          <Button onClick={function () { handleApprove(); }} disabled={sending}>
+            {allPhasesDone ? t('approveFinalButton') : t('approveButton', { phase: currentPhase })}
+          </Button>
         )}
 
         {awaitingApproval && showManualEditor && (
