@@ -57,6 +57,7 @@ export default function BabelPage() {
   const [input, setInput] = React.useState('');
   const [sending, setSending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const retryRef = React.useRef<(() => Promise<void>) | null>(null);
   
   // Estado para el flujo de preguntas una por una
   const [currentQuestionIndex, setCurrentQuestionIndex] = React.useState(0);
@@ -140,17 +141,18 @@ export default function BabelPage() {
         };
 
         const allMessages = [...session.messages, userMsg, summaryMsg];
+        const body = {
+          messages: allMessages,
+          language: locale,
+          phase: 0,
+          phase0Complete: true,
+          phase0Data: updatedAnswers,
+        };
         
         const res = await fetch('/api/babel', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages: allMessages,
-            language: locale,
-            phase: 0,
-            phase0Complete: true,
-            phase0Data: updatedAnswers,
-          }),
+          body: JSON.stringify(body),
         });
         const data = await res.json();
         if (!res.ok || data.error) throw new Error(data.error || 'Error al procesar Fase 0');
@@ -187,7 +189,54 @@ export default function BabelPage() {
         await saveBabelMessages(uid, messagesWithNextQuestion);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al procesar');
+      const errMsg = err instanceof Error ? err.message : 'Error al procesar';
+      setError(errMsg);
+      // Guardar reintento solo si estábamos en la última pregunta
+      if (currentQuestionIndex === questions.length - 1) {
+        const phase0Summary = Object.entries({ ...phase0Answers, [questions[currentQuestionIndex].key]: input.trim() })
+          .map(([key, value]) => `**${key}**: ${value}`)
+          .join('\n\n');
+        const summaryMsg: ChatMessage = {
+          role: 'user',
+          content: `Fase 0 completada:\n\n${phase0Summary}`,
+          timestamp: Timestamp.now(),
+        };
+        const allMessages = [...session.messages, userMsg, summaryMsg];
+        const retryBody = {
+          messages: allMessages,
+          language: locale,
+          phase: 0,
+          phase0Complete: true,
+          phase0Data: { ...phase0Answers, [questions[currentQuestionIndex].key]: input.trim() },
+        };
+        retryRef.current = async () => {
+          setSending(true);
+          setError(null);
+          try {
+            const res = await fetch('/api/babel', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(retryBody),
+            });
+            const data = await res.json();
+            if (!res.ok || data.error) throw new Error(data.error || 'Error al procesar Fase 0');
+            retryRef.current = null;
+            const assistantMsg: ChatMessage = {
+              role: 'assistant',
+              content: data.reply as string,
+              timestamp: Timestamp.now(),
+            };
+            const finalMessages = [...allMessages, assistantMsg];
+            setSession((prev) => (prev ? { ...prev, messages: finalMessages } : prev));
+            await saveBabelMessages(uid, finalMessages);
+            setIsPhase0Complete(true);
+          } catch (retryErr) {
+            setError(retryErr instanceof Error ? retryErr.message : 'Error al procesar');
+          } finally {
+            setSending(false);
+          }
+        };
+      }
     } finally {
       setSending(false);
     }
@@ -198,6 +247,7 @@ export default function BabelPage() {
     if (!uid || !session || !text.trim()) return;
     setSending(true);
     setError(null);
+    retryRef.current = null;
 
     const userMsg: ChatMessage = {
       role: 'user',
@@ -206,20 +256,26 @@ export default function BabelPage() {
     };
     const historyForApi = [...session.messages, userMsg];
     setSession({ ...session, messages: historyForApi });
+    const sentText = text.trim();
     setInput('');
+
+    // Guardar payload para reintentar
+    const payload = {
+      messages: historyForApi.map((m) => ({ role: m.role, content: m.content })),
+      language: locale,
+      phase: currentPhase,
+    };
 
     try {
       const res = await fetch('/api/babel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: historyForApi.map((m) => ({ role: m.role, content: m.content })),
-          language: locale,
-          phase: currentPhase,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Error genérico');
+
+      retryRef.current = null;
 
       const assistantMsg: ChatMessage = {
         role: 'assistant',
@@ -230,7 +286,35 @@ export default function BabelPage() {
       setSession((prev) => (prev ? { ...prev, messages: finalMessages } : prev));
       await saveBabelMessages(uid, finalMessages);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error genérico');
+      const errMsg = err instanceof Error ? err.message : 'Error genérico';
+      setError(errMsg);
+      // Guardar reintento: reenvía el mismo payload, reusa historyForApi
+      retryRef.current = async () => {
+        setSending(true);
+        setError(null);
+        try {
+          const res = await fetch('/api/babel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          if (!res.ok || data.error) throw new Error(data.error || 'Error genérico');
+          retryRef.current = null;
+          const assistantMsg: ChatMessage = {
+            role: 'assistant',
+            content: data.reply as string,
+            timestamp: Timestamp.now(),
+          };
+          const finalMessages = [...historyForApi, assistantMsg];
+          setSession((prev) => (prev ? { ...prev, messages: finalMessages } : prev));
+          await saveBabelMessages(uid, finalMessages);
+        } catch (retryErr) {
+          setError(retryErr instanceof Error ? retryErr.message : 'Error genérico');
+        } finally {
+          setSending(false);
+        }
+      };
     } finally {
       setSending(false);
     }
@@ -391,6 +475,21 @@ export default function BabelPage() {
         </div>
         <p className="text-sm text-slate-600">Pregunta {currentQuestionIndex + 1} de {questions.length}</p>
 
+        {error && (
+          <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600 border border-red-200">
+            <div className="mb-1">{error}</div>
+            {retryRef.current && (
+              <button
+                onClick={() => retryRef.current?.()}
+                disabled={sending}
+                className="text-xs font-medium text-red-700 underline underline-offset-2 hover:text-red-900 disabled:opacity-50"
+              >
+                {sending ? 'Reintentando...' : 'Reintentar'}
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Pregunta actual y formulario */}
         <Card className="p-6">
           <div className="whitespace-pre-wrap text-slate-900 mb-4 font-medium">
@@ -473,7 +572,18 @@ export default function BabelPage() {
       </Card>
 
       {error && (
-        <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600 border border-red-200">{error}</div>
+        <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600 border border-red-200">
+          <div className="mb-1">{error}</div>
+          {retryRef.current && (
+            <button
+              onClick={() => retryRef.current?.()}
+              disabled={sending}
+              className="text-xs font-medium text-red-700 underline underline-offset-2 hover:text-red-900 disabled:opacity-50"
+            >
+              {sending ? 'Reintentando...' : 'Reintentar'}
+            </button>
+          )}
+        </div>
       )}
 
       <div className="flex flex-col gap-2">
