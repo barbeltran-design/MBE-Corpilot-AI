@@ -118,15 +118,15 @@ export default function BabelPage() {
     setSending(true);
     setError(null);
 
+    const userMsg: ChatMessage = {
+      role: 'user',
+      content: answer,
+      timestamp: Timestamp.now(),
+    };
+
     try {
       const updatedAnswers = { ...phase0Answers, [questions[currentQuestionIndex].key]: answer };
       setPhase0Answers(updatedAnswers);
-
-      const userMsg: ChatMessage = {
-        role: 'user',
-        content: answer,
-        timestamp: Timestamp.now(),
-      };
 
       if (currentQuestionIndex === questions.length - 1) {
         // ÚLTIMA PREGUNTA: Enviar todo a la API
