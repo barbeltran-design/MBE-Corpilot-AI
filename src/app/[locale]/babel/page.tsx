@@ -12,26 +12,28 @@ import {
   approveBabelPhase,
   compileApprovedPhases,
   resetBabelSession,
+  updateBabelPhaseSummary,
 } from '@/lib/babel-session';
 import { BABEL_IMPLEMENTED_PHASES, babelApprovalMarker } from '@/lib/babel-constants';
 import { createCompiledPlanDeliverable } from '@/lib/deliverables';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import type { ChatMessage, SessionDoc } from '@/types/firestore';
+import { ChevronDown, ChevronRight } from 'lucide-react';
+import type { BabelPhaseRecord, ChatMessage, SessionDoc } from '@/types/firestore';
 
 // Preguntas de la Fase 0 (una por una)
 const PHASE_0_QUESTIONS = {
   es: [
-    { key: 'giro', question: '### 1. Giro y nicho específico\n\n¿Qué vendes exactamente y a quién va dirigido?' },
-    { key: 'ubicacion', question: '### 2. Ubicación operativa\n\n¿En qué ciudad, estado y país operará el negocio?' },
-    { key: 'madurez', question: '### 3. Madurez actual\n\n¿Es una idea en papel, un producto o servicio ya validado, o un negocio en marcha buscando escalar?' },
-    { key: 'recursos', question: '### 4. Recursos disponibles\n\n¿Con qué recursos materiales, humanos, intelectuales (marca, procesos, patentes) y financieros cuentas actualmente?' },
-    { key: 'ambicion', question: '### 5. Nivel de ambición financiera\n\n¿Buscas crear un autoempleo sostenible o una estructura escalable para levantar capital de inversionistas?' },
-    { key: 'mision_vision', question: '### 6. Propósito Común, Misión y visión\n\n¿Ya las tienes definidas o prefieres que las diseñemos desde cero?' },
-    { key: 'utilidad_deseada', question: '### 7. Utilidad mensual deseada\n\n¿Cuánto dinero neto quisieras que sobrara de ganancias mensualmente para vivir? (en tu moneda local)' },
-    { key: 'sueldo_founder', question: '### 8. Sueldo del fundador\n\nSi vas a operar el negocio, ¿qué sueldo te asignarías para cubrir hasta 3 roles, que sería el mismo que le pagarías a otra persona por hacer cada rol? (Administración, Comercial, Operación)' },
-    { key: 'gastos_fijos', question: '### 9. Gastos fijos\n\n¿Qué gastos fijos tienes que pagar aunque no vendas (renta, servicios, software)?' },
-    { key: 'gastos_variables', question: '### 10. Gastos variables\n\n¿Qué gastos variables tienes que pagar relacionados a entregar tu producto o servicio (materia prima, comisiones)?' }
+    { key: 'giro', question: '### 1. Giro y nicho especifico\n\nQue vendes exactamente y a quien va dirigido?' },
+    { key: 'ubicacion', question: '### 2. Ubicacion operativa\n\nEn que ciudad, estado y pais operara el negocio?' },
+    { key: 'madurez', question: '### 3. Madurez actual\n\nEs una idea en papel, un producto o servicio ya validado, o un negocio en marcha buscando escalar?' },
+    { key: 'recursos', question: '### 4. Recursos disponibles\n\nCon que recursos materiales, humanos, intelectuales (marca, procesos, patentes) y financieros cuentas actualmente?' },
+    { key: 'ambicion', question: '### 5. Nivel de ambicion financiera\n\nBuscas crear un autoempleo sostenible o una estructura escalable para levantar capital de inversionistas?' },
+    { key: 'mision_vision', question: '### 6. Proposito Comun, Mision y vision\n\nYa las tienes definidas o prefieres que las disenemos desde cero?' },
+    { key: 'utilidad_deseada', question: '### 7. Utilidad mensual deseada\n\nCuanto dinero neto quisieras que sobrara de ganancias mensualmente para vivir? (en tu moneda local)' },
+    { key: 'sueldo_founder', question: '### 8. Sueldo del fundador\n\nSi vas a operar el negocio, que sueldo te asignarias para cubrir hasta 3 roles, que seria el mismo que le pagarias a otra persona por hacer cada rol? (Administracion, Comercial, Operacion)' },
+    { key: 'gastos_fijos', question: '### 9. Gastos fijos\n\nQue gastos fijos tienes que pagar aunque no vendas (renta, servicios, software)?' },
+    { key: 'gastos_variables', question: '### 10. Gastos variables\n\nQue gastos variables tienes que pagar relacionados a entregar tu producto o servicio (materia prima, comisiones)?' }
   ],
   en: [
     { key: 'giro', question: '### 1. Business Type and Niche\n\nWhat exactly do you sell and who is it for?' },
@@ -41,8 +43,8 @@ const PHASE_0_QUESTIONS = {
     { key: 'ambicion', question: '### 5. Financial Ambition Level\n\nAre you looking to create sustainable self-employment or a scalable structure to raise capital from investors?' },
     { key: 'mision_vision', question: '### 6. Shared Goal, Mission and Vision\n\nDo you already have them defined or would you prefer us to design them from scratch?' },
     { key: 'utilidad_deseada', question: '### 7. Desired Monthly Profit\n\nHow much net profit would you like to have left over each month to live on? (in your local currency)' },
-    { key: 'sueldo_founder', question: '### 8. Founder\'s Salary\n\nIf you\'re going to run the business, what salary would you assign yourself to cover up to 3 roles, which would be the same as what you would pay another person to perform each role? (Administration, Commercial, Operations)' },
-    { key: 'gastos_fijos', question: '### 9. Fixed Costs\n\nWhat fixed costs (rent, services, software) do you pay even if you don´t sale anything?' },
+    { key: 'sueldo_founder', question: '### 8. Founder Salary\n\nIf you are going to run the business, what salary would you assign yourself to cover up to 3 roles, which would be the same as what you would pay another person to perform each role? (Administration, Commercial, Operations)' },
+    { key: 'gastos_fijos', question: '### 9. Fixed Costs\n\nWhat fixed costs (rent, services, software) do you pay even if you dont sale anything?' },
     { key: 'gastos_variables', question: '### 10. Variable Costs\n\nWhat variable costs (raw materials, commissions) do you identify to deliver your product or service?' }
   ]
 };
@@ -58,21 +60,31 @@ export default function BabelPage() {
   const [sending, setSending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const retryRef = React.useRef<(() => Promise<void>) | null>(null);
-  
+  const [editingMessageIndex, setEditingMessageIndex] = React.useState<number | null>(null);
+  const [editContent, setEditContent] = React.useState('');
+  const [showPhasesPanel, setShowPhasesPanel] = React.useState(false);
+  const [editingPhase, setEditingPhase] = React.useState<number | null>(null);
+  const [editPhaseContent, setEditPhaseContent] = React.useState('');
+  const [expandedPhases, setExpandedPhases] = React.useState<Set<number>>(new Set());
+  const [chatExpanded, setChatExpanded] = React.useState<Set<number>>(new Set());
+  const [compiling, setCompiling] = React.useState(false);
+  const [showManualEditor, setShowManualEditor] = React.useState(false);
+  const [manualContent, setManualContent] = React.useState('');
+
   // Estado para el flujo de preguntas una por una
   const [currentQuestionIndex, setCurrentQuestionIndex] = React.useState(0);
   const [phase0Answers, setPhase0Answers] = React.useState<Record<string, string>>({});
   const [isPhase0Complete, setIsPhase0Complete] = React.useState(false);
-  
+
   const bottomRef = React.useRef<HTMLDivElement>(null);
   const questions = PHASE_0_QUESTIONS[locale];
 
-  // 1. Autenticación y carga de sesión
+  // 1. Autenticacion y carga de sesion
   React.useEffect(() => {
     const auth = getFirebaseAuth();
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
-        router.push(`/${locale}`);
+        router.push('/' + locale);
         return;
       }
       setUid(user.uid);
@@ -87,14 +99,14 @@ export default function BabelPage() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [session?.messages.length]);
 
-  // 3. Inyectar la primera pregunta automáticamente al iniciar
+  // 3. Inyectar la primera pregunta automaticamente al iniciar
   React.useEffect(() => {
     if (!session || isPhase0Complete) return;
     if (session.messages.length === 0 && currentQuestionIndex === 0) {
       const firstQuestion = questions[0];
       const questionMsg: ChatMessage = {
         role: 'assistant',
-        content: `¡Hola! Soy **Babel**, Strategic Business Architect & Sustainability Lead de MBE Corp.\n\nPara iniciar con el pie derecho, te haré **10 preguntas clave** una por una. Responde con calma.\n\n**Nota:** Usa la tecla Enter para bajar de renglón. El mensaje solo se envía cuando presionas el botón "Enviar".\n\n---\n\n${firstQuestion.question}`,
+        content: 'Hola! Soy **Babel**, Strategic Business Architect & Sustainability Lead de MBE Corp.\n\nPara iniciar con el pie derecho, te hare **10 preguntas clave** una por una. Responde con calma.\n\n**Nota:** Usa la tecla Enter para bajar de renglon. El mensaje solo se envia cuando presionas el boton "Enviar".\n\n---\n\n' + firstQuestion.question,
         timestamp: Timestamp.now(),
       };
       setSession(prev => prev ? { ...prev, messages: [questionMsg] } : prev);
@@ -109,6 +121,20 @@ export default function BabelPage() {
     !!lastMessage &&
     lastMessage.role === 'assistant' &&
     lastMessage.content.includes(babelApprovalMarker(locale));
+
+  function friendlyError(raw: string): string {
+    if (raw.includes('image.png')) {
+      return 'El proveedor de IA actual no soporta imagenes. El error se resolvira al cambiar automaticamente al siguiente proveedor disponible.';
+    }
+    return raw;
+  }
+
+  // Si la sesion ya tiene fases aprobadas desde Firestore, salir del wizard
+  React.useEffect(() => {
+    if (session && (session.currentPhase ?? 0) > 0) {
+      setIsPhase0Complete(true);
+    }
+  }, [session]);
 
   // 4. Manejar respuesta en Fase 0 (Pregunta por pregunta)
   async function handlePhase0Answer() {
@@ -129,76 +155,60 @@ export default function BabelPage() {
       setPhase0Answers(updatedAnswers);
 
       if (currentQuestionIndex === questions.length - 1) {
-        // ÚLTIMA PREGUNTA: Enviar todo a la API
-        const phase0Summary = Object.entries(updatedAnswers)
-          .map(([key, value]) => `**${key}**: ${value}`)
-          .join('\n\n');
+        // ULTIMA PREGUNTA: generar conclusion local (sin API)
+        const phase0Labels: Record<string, string> = locale === 'en'
+          ? { giro: 'Business Type', ubicacion: 'Location', madurez: 'Maturity', recursos: 'Resources', ambicion: 'Ambition', mision_vision: 'Mission & Vision', utilidad_deseada: 'Desired Monthly Profit', sueldo_founder: 'Founder Salary', gastos_fijos: 'Fixed Costs', gastos_variables: 'Variable Costs' }
+          : { giro: 'Giro y nicho', ubicacion: 'Ubicación', madurez: 'Madurez', recursos: 'Recursos', ambicion: 'Ambición', mision_vision: 'Misión y Visión', utilidad_deseada: 'Utilidad mensual deseada', sueldo_founder: 'Sueldo del fundador', gastos_fijos: 'Gastos fijos', gastos_variables: 'Gastos variables' };
+
+        const conclusionLines = Object.entries(updatedAnswers).map(function (entry) {
+          return '**' + (phase0Labels[entry[0]] ?? entry[0]) + ':** ' + entry[1];
+        });
+        const conclusionBody = '### Resumen de Fase 0 — Calibración Inicial\n\n' + conclusionLines.join('\n\n---\n\n') + '\n\n---\n\n*¿Apruebas este resumen de la Fase 0 para continuar a la Fase 1?*';
 
         const summaryMsg: ChatMessage = {
           role: 'user',
-          content: `Fase 0 completada:\n\n${phase0Summary}`,
+          content: 'Fase 0 completada:\n\n' + conclusionLines.join('\n\n'),
           timestamp: Timestamp.now(),
         };
-
-        const allMessages = [...session.messages, userMsg, summaryMsg];
-        const body = {
-          messages: allMessages,
-          language: locale,
-          phase: 0,
-          phase0Complete: true,
-          phase0Data: updatedAnswers,
-        };
-        
-        const res = await fetch('/api/babel', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-        const data = await res.json();
-        if (!res.ok || data.error) throw new Error(data.error || 'Error al procesar Fase 0');
-
         const assistantMsg: ChatMessage = {
           role: 'assistant',
-          content: data.reply as string,
+          content: conclusionBody,
           timestamp: Timestamp.now(),
         };
-        
-        const finalMessages = [...allMessages, assistantMsg];
-        setSession((prev) => (prev ? { ...prev, messages: finalMessages } : prev));
-        await saveBabelMessages(uid, finalMessages);
+
+        const cleanMessages: ChatMessage[] = [summaryMsg, assistantMsg];
+        setSession(function (prev) { return prev ? { ...prev, messages: cleanMessages } : prev; });
+        await saveBabelMessages(uid, cleanMessages);
         setIsPhase0Complete(true);
       } else {
-        // PREGUNTAS INTERMEDIAS: Guardar y avanzar automáticamente
+        // PREGUNTAS INTERMEDIAS: solo estado local, NO a Firestore
         const updatedMessages = [...session.messages, userMsg];
-        setSession((prev) => (prev ? { ...prev, messages: updatedMessages } : prev));
-        await saveBabelMessages(uid, updatedMessages);
-        
+        setSession(function (prev) { return prev ? { ...prev, messages: updatedMessages } : prev; });
+
         const nextIndex = currentQuestionIndex + 1;
         setCurrentQuestionIndex(nextIndex);
-        
-        // Inyectar la siguiente pregunta automáticamente
+
         const nextQuestion = questions[nextIndex];
         const nextQuestionMsg: ChatMessage = {
           role: 'assistant',
           content: nextQuestion.question,
           timestamp: Timestamp.now(),
         };
-        
+
         const messagesWithNextQuestion = [...updatedMessages, nextQuestionMsg];
-        setSession((prev) => (prev ? { ...prev, messages: messagesWithNextQuestion } : prev));
-        await saveBabelMessages(uid, messagesWithNextQuestion);
+        setSession(function (prev) { return prev ? { ...prev, messages: messagesWithNextQuestion } : prev; });
       }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : 'Error al procesar';
       setError(errMsg);
-      // Guardar reintento solo si estábamos en la última pregunta
+      // Guardar reintento solo si estabamos en la ultima pregunta
       if (currentQuestionIndex === questions.length - 1) {
         const phase0Summary = Object.entries({ ...phase0Answers, [questions[currentQuestionIndex].key]: input.trim() })
-          .map(([key, value]) => `**${key}**: ${value}`)
+          .map(function (entry) { return '**' + entry[0] + '**: ' + entry[1]; })
           .join('\n\n');
         const summaryMsg: ChatMessage = {
           role: 'user',
-          content: `Fase 0 completada:\n\n${phase0Summary}`,
+          content: 'Fase 0 completada:\n\n' + phase0Summary,
           timestamp: Timestamp.now(),
         };
         const allMessages = [...session.messages, userMsg, summaryMsg];
@@ -209,7 +219,7 @@ export default function BabelPage() {
           phase0Complete: true,
           phase0Data: { ...phase0Answers, [questions[currentQuestionIndex].key]: input.trim() },
         };
-        retryRef.current = async () => {
+        retryRef.current = async function () {
           setSending(true);
           setError(null);
           try {
@@ -226,9 +236,9 @@ export default function BabelPage() {
               content: data.reply as string,
               timestamp: Timestamp.now(),
             };
-            const finalMessages = [...allMessages, assistantMsg];
-            setSession((prev) => (prev ? { ...prev, messages: finalMessages } : prev));
-            await saveBabelMessages(uid, finalMessages);
+            const cleanMessages: ChatMessage[] = [summaryMsg, assistantMsg];
+            setSession(function (prev) { return prev ? { ...prev, messages: cleanMessages } : prev; });
+            await saveBabelMessages(uid, cleanMessages);
             setIsPhase0Complete(true);
           } catch (retryErr) {
             setError(retryErr instanceof Error ? retryErr.message : 'Error al procesar');
@@ -261,7 +271,7 @@ export default function BabelPage() {
 
     // Guardar payload para reintentar
     const payload = {
-      messages: historyForApi.map((m) => ({ role: m.role, content: m.content })),
+      messages: historyForApi.map(function (m) { return { role: m.role, content: m.content }; }),
       language: locale,
       phase: currentPhase,
     };
@@ -273,7 +283,7 @@ export default function BabelPage() {
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || 'Error genérico');
+      if (!res.ok || data.error) throw new Error(data.error || 'Error generico');
 
       retryRef.current = null;
 
@@ -283,13 +293,12 @@ export default function BabelPage() {
         timestamp: Timestamp.now(),
       };
       const finalMessages = [...historyForApi, assistantMsg];
-      setSession((prev) => (prev ? { ...prev, messages: finalMessages } : prev));
+      setSession(function (prev) { return prev ? { ...prev, messages: finalMessages } : prev; });
       await saveBabelMessages(uid, finalMessages);
     } catch (err) {
-      const errMsg = err instanceof Error ? err.message : 'Error genérico';
+      const errMsg = err instanceof Error ? err.message : 'Error generico';
       setError(errMsg);
-      // Guardar reintento: reenvía el mismo payload, reusa historyForApi
-      retryRef.current = async () => {
+      retryRef.current = async function () {
         setSending(true);
         setError(null);
         try {
@@ -299,7 +308,7 @@ export default function BabelPage() {
             body: JSON.stringify(payload),
           });
           const data = await res.json();
-          if (!res.ok || data.error) throw new Error(data.error || 'Error genérico');
+          if (!res.ok || data.error) throw new Error(data.error || 'Error generico');
           retryRef.current = null;
           const assistantMsg: ChatMessage = {
             role: 'assistant',
@@ -307,10 +316,10 @@ export default function BabelPage() {
             timestamp: Timestamp.now(),
           };
           const finalMessages = [...historyForApi, assistantMsg];
-          setSession((prev) => (prev ? { ...prev, messages: finalMessages } : prev));
+          setSession(function (prev) { return prev ? { ...prev, messages: finalMessages } : prev; });
           await saveBabelMessages(uid, finalMessages);
         } catch (retryErr) {
-          setError(retryErr instanceof Error ? retryErr.message : 'Error genérico');
+          setError(retryErr instanceof Error ? retryErr.message : 'Error generico');
         } finally {
           setSending(false);
         }
@@ -320,19 +329,19 @@ export default function BabelPage() {
     }
   }
 
-  async function handleApprove() {
+  async function handleApprove(editedText?: string) {
     if (!uid || !session || !lastMessage) return;
     setSending(true);
     setError(null);
+    setEditingMessageIndex(null);
+    const approvedContent = editedText ?? lastMessage.content;
     try {
-      await approveBabelPhase(uid, currentPhase, lastMessage.content, locale);
+      await approveBabelPhase(uid, currentPhase, approvedContent, locale);
       const refreshed = await getOrCreateBabelSession(uid, locale);
 
       if ((refreshed.currentPhase ?? 0) >= BABEL_IMPLEMENTED_PHASES) {
-        // Se acaba de aprobar la última fase (Fase 5). No hay una fase
-        // siguiente que pedirle a Gemini: allPhasesDone pasa a true y el
-        // textarea se vuelve a habilitar solo, listo para "/compilar".
         setSession(refreshed);
+        await upsertCompiledPlan(refreshed.messages, refreshed.phases);
         return;
       }
 
@@ -342,83 +351,159 @@ export default function BabelPage() {
         timestamp: Timestamp.now(),
       };
       const historyForApi = [...refreshed.messages, approvalMsg];
-      setSession({ ...refreshed, messages: historyForApi });
 
       const res = await fetch('/api/babel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: historyForApi.map((m) => ({ role: m.role, content: m.content })),
+          messages: historyForApi.map(function (m) { return { role: m.role, content: m.content }; }),
           language: locale,
           phase: refreshed.currentPhase,
         }),
       });
       const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || 'Error genérico');
+      if (!res.ok || data.error) throw new Error(data.error || 'Error generico');
 
       const assistantMsg: ChatMessage = {
         role: 'assistant',
         content: data.reply as string,
         timestamp: Timestamp.now(),
       };
-      const finalMessages = [...historyForApi, assistantMsg];
-      setSession((prev) => (prev ? { ...prev, messages: finalMessages } : { ...refreshed, messages: finalMessages }));
+      const finalMessages = [...refreshed.messages, assistantMsg];
+      setSession(function (prev) { return prev ? { ...prev, messages: finalMessages } : { ...refreshed, messages: finalMessages }; });
       await saveBabelMessages(uid, finalMessages);
+      await upsertCompiledPlan(finalMessages, refreshed.phases);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error genérico');
+      setError(err instanceof Error ? err.message : 'Error generico');
+      const refreshed = await getOrCreateBabelSession(uid, locale);
+      setSession(refreshed);
     } finally {
       setSending(false);
     }
   }
 
-  async function handleCompile() {
+  function handleStartEdit(index: number, content: string) {
+    setEditingMessageIndex(index);
+    setEditContent(content);
+  }
+
+  function handleCancelEdit() {
+    setEditingMessageIndex(null);
+    setEditContent('');
+  }
+
+  async function handleSaveEdit() {
+    if (!uid || !session || editingMessageIndex === null) return;
+    setError(null);
+    try {
+      const originalContent = session.messages[editingMessageIndex]?.content ?? '';
+      const updatedMessages = session.messages.map(function (m, i) {
+        return i === editingMessageIndex ? { ...m, content: editContent } : m;
+      });
+      await saveBabelMessages(uid, updatedMessages);
+      for (const p of session.phases ?? []) {
+        if (p.summary === originalContent || originalContent.startsWith(p.summary) || p.summary.startsWith(originalContent)) {
+          await updateBabelPhaseSummary(uid, p.phase, editContent);
+        }
+      }
+      setEditingMessageIndex(null);
+      setEditContent('');
+      const refreshed = await getOrCreateBabelSession(uid, locale);
+      setSession(refreshed);
+      await upsertCompiledPlan(refreshed.messages, refreshed.phases);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al guardar');
+    }
+  }
+
+  async function manualApprovePhase(phase: number, text: string) {
     if (!uid || !session) return;
     setSending(true);
     setError(null);
+    setShowManualEditor(false);
     try {
-      const compiled = compileApprovedPhases(session);
-      const compiledText = compiled ? `### Plan Estratégico Compilado\n\n${compiled}` : 'No hay fases aprobadas para compilar aún.';
-      const userMsg: ChatMessage = { role: 'user', content: '/compilar', timestamp: Timestamp.now() };
-      const assistantMsg: ChatMessage = { role: 'assistant', content: compiledText, timestamp: Timestamp.now() };
+      await approveBabelPhase(uid, phase, text, locale);
+      const refreshed = await getOrCreateBabelSession(uid, locale);
+      setManualContent('');
+      setSession(refreshed);
+      await upsertCompiledPlan(refreshed.messages, refreshed.phases);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al guardar');
+    } finally {
+      setSending(false);
+    }
+  }
 
-      if (compiled) {
-        try {
-          const deliverable = await createCompiledPlanDeliverable({
-            uid,
-            agentId: 'babel',
-            sessionTopic: session.topic,
-            compiledText: compiled,
-            language: locale,
-          });
-          assistantMsg.deliverables = [deliverable];
-        } catch (deliverableErr) {
-          // No bloquea el compilado en pantalla si falla la generación del PDF
-          // (p. ej. reglas de Storage no configuradas todavía) — el usuario
-          // igual ve su plan compilado, solo sin el link de descarga.
-          console.error('[babel] No se pudo generar el PDF del plan compilado', deliverableErr);
+
+  async function upsertCompiledPlan(overrideMessages?: ChatMessage[], overridePhases?: BabelPhaseRecord[]) {
+    if (!uid || !session) return;
+    try {
+      const phases = overridePhases ?? session.phases ?? [];
+      const compiled = phases.length > 0 ? [...phases].sort((a, b) => a.phase - b.phase).map((p) => p.summary).join('\n\n---\n\n') : '';
+      const compiledText = compiled ? '### Plan Estrategico Compilado\n\n' + compiled : 'No hay fases aprobadas para compilar aun.';
+
+      const baseMessages = overrideMessages ?? session.messages;
+      let existingIdx = -1;
+      for (let j = baseMessages.length - 1; j >= 0; j--) {
+        if (baseMessages[j].role === 'assistant' && baseMessages[j].content.startsWith('### Plan Estrategico Compilado')) {
+          existingIdx = j;
+          break;
         }
       }
 
-      const finalMessages = [...session.messages, userMsg, assistantMsg];
-      setSession({ ...session, messages: finalMessages });
+      let finalMessages: ChatMessage[];
+      if (existingIdx >= 0) {
+        finalMessages = baseMessages.map(function (m, i) {
+          return i === existingIdx ? { ...m, content: compiledText } : m;
+        });
+      } else {
+        const assistantMsg: ChatMessage = { role: 'assistant', content: compiledText, timestamp: Timestamp.now() };
+        if (compiled) {
+          try {
+            const deliverable = await createCompiledPlanDeliverable({
+              uid: uid, agentId: 'babel', sessionTopic: session.topic, compiledText: compiled, language: locale,
+            });
+            assistantMsg.deliverables = [deliverable];
+          } catch (deliverableErr) {
+            console.error('[babel] No se pudo generar el PDF del plan compilado', deliverableErr);
+          }
+        }
+        finalMessages = [...baseMessages, assistantMsg];
+      }
+
+      setSession(function (prev) { return prev ? { ...prev, messages: finalMessages } : prev; });
       setInput('');
-      await saveBabelMessages(uid, finalMessages);
+    } catch (err) {
+      console.error('[babel] Error en upsertCompiledPlan:', err);
+      throw err;
+    }
+  }
+
+  async function handleCompile() {
+    if (!uid || !session || compiling) return;
+    setCompiling(true);
+    setError(null);
+    try {
+      await upsertCompiledPlan();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al compilar');
     } finally {
-      setSending(false);
+      setCompiling(false);
     }
   }
 
   async function handleLogout() {
     const auth = getFirebaseAuth();
     await signOut(auth);
-    router.push(`/${locale}`);
+    router.push('/' + locale);
   }
+
   async function handleReset() {
     if (!uid) return;
     const confirmMsg =
       locale === 'en'
         ? 'This will erase all progress in this session and start over from scratch. This cannot be undone. Continue?'
-        : 'Esto borrará todo el progreso de esta sesión y empezará de nuevo desde cero. No se puede deshacer. ¿Continuar?';
+        : 'Esto borrara todo el progreso de esta sesion y empezara de nuevo desde cero. No se puede deshacer. Continuar?';
     if (!window.confirm(confirmMsg)) return;
     setSending(true);
     setError(null);
@@ -435,14 +520,13 @@ export default function BabelPage() {
       setSending(false);
     }
   }
+
   if (!session) {
     return <div className="flex min-h-screen items-center justify-center text-slate-500">{t('loading')}</div>;
   }
 
-  // ==========================================
   // VISTA 1: WIZARD DE FASE 0 (Pregunta por pregunta)
-  // ==========================================
-  const isPhase0Active = currentQuestionIndex < questions.length && !isPhase0Complete;
+  const isPhase0Active = currentPhase === 0 && currentQuestionIndex < questions.length && !isPhase0Complete;
 
   if (isPhase0Active) {
     return (
@@ -450,44 +534,105 @@ export default function BabelPage() {
         <div className="flex items-center justify-between border-b pb-4">
           <div>
             <h1 className="text-xl font-semibold text-slate-900">{t('title')}</h1>
-            <p className="text-sm text-slate-500">Fase 0: Calibración Inicial</p>
+            <p className="text-sm text-slate-500">Fase 0: Calibracion Inicial</p>
           </div>
           <div className="flex gap-2">
            <Button onClick={handleReset} disabled={sending} variant="outline" size="sm">Empezar de nuevo</Button>
-           <Button onClick={handleLogout} variant="outline" size="sm">Cerrar sesión</Button>
+           <Button onClick={handleLogout} variant="outline" size="sm">Cerrar sesion</Button>
           </div>
         </div>
 
         {/* Historial de respuestas previas */}
         {session.messages.length > 0 && (
           <Card className="flex-1 space-y-3 overflow-y-auto p-4 max-h-[40vh]">
-            {session.messages.map((m, i) => (
-              <div key={i} className={`max-w-[85%] whitespace-pre-wrap rounded-xl px-3.5 py-2 text-sm ${m.role === 'user' ? 'ml-auto bg-slate-900 text-white' : 'bg-slate-100 text-slate-900'}`}>
-                {m.content}
-              </div>
-            ))}
+            {session.messages.map(function (m, i) {
+              const isLong = m.content.length > 300;
+              const isExpanded = chatExpanded.has(i);
+              return (
+                <div key={i} className={'max-w-[85%] rounded-xl px-3.5 py-2 text-sm ' + (m.role === 'user' ? 'ml-auto bg-slate-900 text-white' : 'bg-slate-100 text-slate-900')}>
+                  <div className={'whitespace-pre-wrap ' + (isLong && !isExpanded ? 'max-h-32 overflow-y-auto' : '')}>
+                    {m.content}
+                  </div>
+                  {isLong && (
+                    <div className="mt-1 flex gap-3">
+                      <button
+                        onClick={function () {
+                          setChatExpanded(function (prev) {
+                            const next = new Set(prev);
+                            if (next.has(i)) { next.delete(i); } else { next.add(i); }
+                            return next;
+                          });
+                        }}
+                        className="text-xs font-medium text-blue-600 hover:text-blue-800 underline underline-offset-2"
+                      >
+                        {isExpanded ? 'Ver menos' : 'Ver todo'}
+                      </button>
+                      {m.role === 'assistant' && (
+                        <button
+                          onClick={function () { handleStartEdit(i, m.content); }}
+                          className="text-xs font-medium text-blue-600 hover:text-blue-800 underline underline-offset-2"
+                        >
+                          Editar
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </Card>
         )}
 
         {/* Barra de progreso */}
         <div className="w-full bg-slate-200 rounded-full h-2">
-          <div className="bg-blue-600 h-2 rounded-full transition-all" style={{ width: `${((currentQuestionIndex + 1) / questions.length) * 100}%` }} />
+          <div className="bg-blue-600 h-2 rounded-full transition-all" style={{ width: String(((currentQuestionIndex + 1) / questions.length) * 100) + '%' }} />
         </div>
         <p className="text-sm text-slate-600">Pregunta {currentQuestionIndex + 1} de {questions.length}</p>
 
         {error && (
           <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600 border border-red-200">
-            <div className="mb-1">{error}</div>
-            {retryRef.current && (
-              <button
-                onClick={() => retryRef.current?.()}
-                disabled={sending}
-                className="text-xs font-medium text-red-700 underline underline-offset-2 hover:text-red-900 disabled:opacity-50"
-              >
-                {sending ? 'Reintentando...' : 'Reintentar'}
-              </button>
-            )}
+            <div className="mb-1">{friendlyError(error)}</div>
+            <div className="mt-2 flex gap-2">
+              {retryRef.current && (
+                <button
+                  onClick={function () { if (retryRef.current) retryRef.current(); }}
+                  disabled={sending}
+                  className="text-xs font-medium text-red-700 underline underline-offset-2 hover:text-red-900 disabled:opacity-50"
+                >
+                  {sending ? 'Reintentando...' : 'Reintentar'}
+                </button>
+              )}
+              {currentQuestionIndex === questions.length - 1 && !showManualEditor && (
+                <button
+                  onClick={function () { setShowManualEditor(true); }}
+                  className="text-xs font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900"
+                >
+                  Escribir mi propia conclusion
+                </button>
+              )}
+            </div>
           </div>
+        )}
+
+        {showManualEditor && (
+          <Card className="p-4 space-y-2">
+            <p className="text-sm font-medium text-slate-700">Escribe tu conclusion de la Fase 0 manualmente:</p>
+            <textarea
+              value={manualContent}
+              onChange={function (e) { setManualContent(e.target.value); }}
+              rows={10}
+              placeholder="Describe aqui el resumen de tu negocio..."
+              className="w-full resize-y rounded border border-slate-300 bg-white p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <div className="flex gap-2">
+              <Button onClick={function () { setShowManualEditor(false); setManualContent(''); }} variant="outline" size="sm">
+                Cancelar
+              </Button>
+              <Button onClick={function () { manualApprovePhase(0, manualContent); }} disabled={sending || !manualContent.trim()} size="sm">
+                {sending ? 'Guardando...' : 'Guardar y aprobar Fase 0'}
+              </Button>
+            </div>
+          </Card>
         )}
 
         {/* Pregunta actual y formulario */}
@@ -495,24 +640,23 @@ export default function BabelPage() {
           <div className="whitespace-pre-wrap text-slate-900 mb-4 font-medium">
             {questions[currentQuestionIndex].question}
           </div>
-          
+
           <form
-            onSubmit={(e) => {
-              e.preventDefault(); // Previene el envío con Enter
+            onSubmit={function (e) {
+              e.preventDefault();
               handlePhase0Answer();
             }}
             className="flex gap-2 items-end"
           >
             <textarea
               value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                // Enter sin Shift = NO envía (permite nueva línea)
+              onChange={function (e) { setInput(e.target.value); }}
+              onKeyDown={function (e) {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
                 }
               }}
-              placeholder="Escribe tu respuesta aquí..."
+              placeholder="Escribe tu respuesta aqui..."
               disabled={sending}
               rows={3}
               className="flex-1 resize-none rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 min-h-[80px]"
@@ -526,9 +670,7 @@ export default function BabelPage() {
     );
   }
 
-  // ==========================================
   // VISTA 2: CHAT NORMAL (Fases 1-5 y posterior a Fase 0)
-  // ==========================================
   return (
     <div className="mx-auto flex min-h-screen max-w-4xl flex-col gap-4 p-4 sm:p-6">
       <div className="flex items-center justify-between border-b pb-4">
@@ -538,31 +680,74 @@ export default function BabelPage() {
         </div>
         <div className="flex gap-2">
          <Button onClick={handleReset} disabled={sending} variant="outline" size="sm">Empezar de nuevo</Button>
-         <Button onClick={handleLogout} variant="outline" size="sm">Cerrar sesión</Button>
+         <Button onClick={handleLogout} variant="outline" size="sm">Cerrar sesion</Button>
         </div>
       </div>
 
       <Card className="flex-1 space-y-3 overflow-y-auto p-4 min-h-[60vh]">
-        {session.messages.map((m, i) => (
-          <div key={i} className={`max-w-[85%] whitespace-pre-wrap rounded-xl px-3.5 py-2 text-sm ${m.role === 'user' ? 'ml-auto bg-slate-900 text-white' : 'bg-slate-100 text-slate-900'}`}>
-            {m.content}
-            {m.deliverables && m.deliverables.length > 0 && (
-              <div className="mt-2 flex flex-col gap-1 border-t border-slate-200 pt-2">
-                {m.deliverables.map((d, di) => (
-                  <a
-                    key={di}
-                    href={d.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900"
+        {session.messages.map(function (m, i) {
+          const isLong = m.content.length > 300;
+          const isExpanded = chatExpanded.has(i);
+          return (
+            <div key={i} className={'max-w-[85%] rounded-xl px-3.5 py-2 text-sm ' + (m.role === 'user' ? 'ml-auto bg-slate-900 text-white' : 'bg-slate-100 text-slate-900')}>
+              {editingMessageIndex === i ? (
+                <div className="space-y-2">
+                  <textarea
+                    value={editContent}
+                    onChange={function (e) { setEditContent(e.target.value); }}
+                    rows={12}
+                    className="w-full resize-y rounded border border-blue-300 bg-white p-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={handleCancelEdit} disabled={sending}>Cancelar</Button>
+                    <Button size="sm" onClick={handleSaveEdit} disabled={sending || !editContent.trim()}>
+                      {sending ? 'Guardando...' : 'Guardar'}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className={'whitespace-pre-wrap ' + (isLong && !isExpanded ? 'max-h-32 overflow-y-auto' : '')}>
+                  {m.content}
+                </div>
+              )}
+              {isLong && !(editingMessageIndex === i) && (
+                <div className="mt-1 flex gap-3">
+                  <button
+                    onClick={function () {
+                      setChatExpanded(function (prev) {
+                        const next = new Set(prev);
+                        if (next.has(i)) { next.delete(i); } else { next.add(i); }
+                        return next;
+                      });
+                    }}
+                    className="text-xs font-medium text-blue-600 hover:text-blue-800 underline underline-offset-2"
                   >
-                    📄 {t('downloadDeliverable')}: {d.name}
-                  </a>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
+                    {isExpanded ? 'Ver menos' : 'Ver todo'}
+                  </button>
+                  {m.role === 'assistant' && !m.content.startsWith('### Plan Estrategico Compilado') && (
+                    <button
+                      onClick={function () { handleStartEdit(i, m.content); }}
+                      className="text-xs font-medium text-blue-600 hover:text-blue-800 underline underline-offset-2"
+                    >
+                      Editar
+                    </button>
+                  )}
+                </div>
+              )}
+              {m.deliverables && m.deliverables.length > 0 && (
+                <div className="mt-2 flex flex-col gap-1 border-t border-slate-200 pt-2">
+                  {m.deliverables.map(function (d, di) {
+                    return (
+                      <a key={di} href={d.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900">
+                        {t('downloadDeliverable')}: {d.name}
+                      </a>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
         {sending && (
           <div className="max-w-[85%] rounded-xl bg-slate-100 px-3.5 py-2 text-sm text-slate-500 animate-pulse">
             {t('loadingReply')}
@@ -571,37 +756,190 @@ export default function BabelPage() {
         <div ref={bottomRef} />
       </Card>
 
-      {error && (
+        {error && (
         <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600 border border-red-200">
-          <div className="mb-1">{error}</div>
-          {retryRef.current && (
-            <button
-              onClick={() => retryRef.current?.()}
-              disabled={sending}
-              className="text-xs font-medium text-red-700 underline underline-offset-2 hover:text-red-900 disabled:opacity-50"
-            >
-              {sending ? 'Reintentando...' : 'Reintentar'}
-            </button>
-          )}
+          <div className="mb-1">{friendlyError(error)}</div>
+          <div className="mt-2 flex gap-2">
+            {retryRef.current && (
+              <button
+                onClick={function () { if (retryRef.current) retryRef.current(); }}
+                disabled={sending}
+                className="text-xs font-medium text-red-700 underline underline-offset-2 hover:text-red-900 disabled:opacity-50"
+              >
+                {sending ? 'Reintentando...' : 'Reintentar'}
+              </button>
+            )}
+            {!showManualEditor && (
+              <button
+                onClick={function () { setShowManualEditor(true); }}
+                className="text-xs font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900"
+              >
+                Escribir mi propia conclusion
+              </button>
+            )}
+          </div>
         </div>
       )}
 
+      {showManualEditor && (
+        <Card className="p-4 space-y-2">
+          <p className="text-sm font-medium text-slate-700">Escribe tu conclusion para la Fase {currentPhase} manualmente:</p>
+          <textarea
+            value={manualContent}
+            onChange={function (e) { setManualContent(e.target.value); }}
+            rows={10}
+            placeholder="Describe aqui tu analisis para esta fase..."
+            className="w-full resize-y rounded border border-slate-300 bg-white p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <div className="flex gap-2">
+            <Button onClick={function () { setShowManualEditor(false); setManualContent(''); }} variant="outline" size="sm">
+              Cancelar
+            </Button>
+            <Button onClick={function () { manualApprovePhase(currentPhase, manualContent); }} disabled={sending || !manualContent.trim()} size="sm">
+              {sending ? 'Guardando...' : 'Guardar y aprobar Fase ' + String(currentPhase)}
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {/* Panel de etapas aprobadas — toggle desde link en botones de aprobación */}
+
       <div className="flex flex-col gap-2">
-        {awaitingApproval && (
-          <Button onClick={handleApprove} disabled={sending} className="w-full">
-            {allPhasesDone ? t('approveFinalButton') : t('approveButton', { phase: currentPhase })}
-          </Button>
+        {awaitingApproval && editingMessageIndex === null && !showManualEditor && (
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <button
+                onClick={function () { setShowPhasesPanel(!showPhasesPanel); }}
+                className="text-xs font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900"
+              >
+                {showPhasesPanel ? 'Ocultar etapas' : 'Ver etapas' + ((session.phases?.length ?? 0) > 0 ? ' (' + String(session.phases?.length) + ')' : '')}
+              </button>
+              <Button
+                onClick={function () { setShowManualEditor(true); }}
+                disabled={sending}
+                variant="outline"
+                className="flex-1"
+              >
+                Escribir propio
+              </Button>
+              <Button onClick={function () { handleApprove(); }} disabled={sending} className="flex-1">
+                {allPhasesDone ? t('approveFinalButton') : t('approveButton', { phase: currentPhase })}
+              </Button>
+            </div>
+            {showPhasesPanel && (
+              <Card className="p-4 space-y-4 max-h-[50vh] overflow-y-auto">
+                {[...(session.phases ?? [])].sort(function (a, b) { return a.phase - b.phase; }).map(function (p) {
+                  const isExpanded = expandedPhases.has(p.phase);
+                  return (
+                    <div key={p.phase} className="border rounded-lg p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-sm font-semibold text-slate-700">Fase {p.phase}</h3>
+                        <button
+                          onClick={function () {
+                            setExpandedPhases(function (prev) {
+                              const next = new Set(prev);
+                              if (next.has(p.phase)) { next.delete(p.phase); } else { next.add(p.phase); }
+                              return next;
+                            });
+                          }}
+                          className="text-slate-400 hover:text-slate-600 transition-colors"
+                        >
+                          {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                        </button>
+                      </div>
+                      {editingPhase === p.phase ? (
+                        <div className="space-y-2">
+                          <textarea
+                            value={editPhaseContent}
+                            onChange={function (e) { setEditPhaseContent(e.target.value); }}
+                            rows={8}
+                            className="w-full resize-y rounded border border-blue-300 bg-white p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          <div className="flex gap-2">
+                            <Button size="sm" variant="outline" onClick={function () { setEditingPhase(null); setEditPhaseContent(''); }}>Cancelar</Button>
+                            <Button size="sm" onClick={async function () {
+                              if (!uid) return;
+                              try {
+                                await updateBabelPhaseSummary(uid, p.phase, editPhaseContent);
+                                const refreshed = await getOrCreateBabelSession(uid, locale);
+                                setEditingPhase(null);
+                                setEditPhaseContent('');
+                                setSession(refreshed);
+                                await upsertCompiledPlan(refreshed.messages, refreshed.phases);
+                              } catch (e) {
+                                setError(e instanceof Error ? e.message : 'Error al guardar');
+                              }
+                            }}>Guardar cambios</Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <div className={'text-xs text-slate-600 whitespace-pre-wrap mb-2 ' + (isExpanded ? '' : 'max-h-40 overflow-y-auto')}>
+                            {isExpanded ? p.summary : (p.summary.slice(0, 500) + (p.summary.length > 500 ? '...' : ''))}
+                          </div>
+                          <button
+                            onClick={function () {
+                              setEditingPhase(p.phase);
+                              setEditPhaseContent(p.summary);
+                            }}
+                            className="text-xs font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900"
+                          >
+                            Editar
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {(session.phases?.length ?? 0) === 0 && (
+                  <p className="text-sm text-slate-500 text-center">No hay etapas aprobadas aun.</p>
+                )}
+              </Card>
+            )}
+          </div>
         )}
-        
+
+        {awaitingApproval && showManualEditor && (
+          <Card className="p-4 space-y-2">
+            <p className="text-sm font-medium text-slate-700">Escribe tu propia conclusion para la Fase {currentPhase}:</p>
+            <textarea
+              value={manualContent}
+              onChange={function (e) { setManualContent(e.target.value); }}
+              rows={10}
+              placeholder="Describe aqui tu analisis para esta fase..."
+              className="w-full resize-y rounded border border-slate-300 bg-white p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <div className="flex gap-2">
+              <Button onClick={function () { setShowManualEditor(false); setManualContent(''); }} variant="outline" size="sm">
+                Cancelar
+              </Button>
+              <Button onClick={function () { manualApprovePhase(currentPhase, manualContent); }} disabled={sending || !manualContent.trim()} size="sm">
+                {sending ? 'Guardando...' : 'Guardar y aprobar Fase ' + String(currentPhase)}
+              </Button>
+            </div>
+          </Card>
+        )}
+
+        {awaitingApproval && editingMessageIndex !== null && (
+          <div className="flex gap-2">
+            <Button onClick={handleCancelEdit} disabled={sending} variant="outline" className="flex-1">
+              Cancelar
+            </Button>
+            <Button onClick={function () { handleApprove(editContent); }} disabled={sending} className="flex-[2]">
+              Guardar y aprobar
+            </Button>
+          </div>
+        )}
+
         {allPhasesDone && !awaitingApproval && (
-          <Button onClick={handleCompile} disabled={sending} variant="outline" className="w-full">
-            Compilar Plan Completo (/compilar)
+          <Button onClick={handleCompile} disabled={compiling} variant="outline" className="w-full">
+            {compiling ? 'Actualizando...' : 'Actualizar plan compilado'}
           </Button>
         )}
 
         <form
-          onSubmit={(e) => {
-            e.preventDefault(); // Previene el envío con Enter
+          onSubmit={function (e) {
+            e.preventDefault();
             if (input.trim() === '/compilar' && allPhasesDone) {
               handleCompile();
             } else {
@@ -612,19 +950,18 @@ export default function BabelPage() {
         >
           <textarea
             value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              // Enter sin Shift = NO envía (permite nueva línea)
+            onChange={function (e) { setInput(e.target.value); }}
+            onKeyDown={function (e) {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
               }
             }}
             placeholder={t('placeholder')}
-            disabled={sending || awaitingApproval}
+            disabled={sending || (awaitingApproval && editingMessageIndex === null && !showManualEditor)}
             rows={3}
             className="flex-1 resize-none rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 min-h-[80px]"
           />
-          <Button type="submit" disabled={sending || awaitingApproval || !input.trim()} className="mb-0 h-10">
+          <Button type="submit" disabled={sending || (awaitingApproval && editingMessageIndex === null && !showManualEditor) || !input.trim()} className="mb-0 h-10">
             {t('send')}
           </Button>
         </form>

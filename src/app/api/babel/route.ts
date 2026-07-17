@@ -20,8 +20,8 @@ import { NextRequest, NextResponse } from 'next/server';
 //
 // Nivel 1 — Groq (gratis, 30 req/min):
 //   API key: console.groq.com | Modelo: llama-3.3-70b-versatile
-// Nivel 2 — OpenRouter (modelos gratuitos):
-//   API key: openrouter.ai/keys | Modelo: meta-llama/llama-3.3-70b-instruct:free
+// Nivel 2 — OpenRouter (auto = OpenRouter elige el mejor modelo gratuito disponible):
+//   API key: openrouter.ai/keys | Modelo: auto
 // Nivel 3 — Gemini (cuota limitada):
 //   API key: aistudio.google.com/apikey | Modelo: gemini-2.5-flash
 // Nivel 4 — 9Router (router local, requiere túnel o VPS):
@@ -31,7 +31,7 @@ const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models
 const FALLBACK_ENDPOINT = process.env.FALLBACK_ENDPOINT || 'https://api.groq.com/openai/v1/chat/completions';
 const FALLBACK_MODEL = process.env.FALLBACK_MODEL || 'llama-3.3-70b-versatile';
 const TERTIARY_ENDPOINT = process.env.TERTIARY_ENDPOINT || 'https://openrouter.ai/api/v1/chat/completions';
-const TERTIARY_MODEL = process.env.TERTIARY_MODEL || 'meta-llama/llama-3.3-70b-instruct:free';
+const TERTIARY_MODEL = process.env.TERTIARY_MODEL || 'auto';
 // 9Router — proxy local con 40+ providers gratuitos.
 // Configura ROUTER_ENDPOINT con la URL pública de tu 9Router (túnel o VPS).
 // Ejemplo: https://tu-tunel.cloudflare.dev/v1
@@ -483,7 +483,7 @@ async function tryGemini(
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: buildSystemPrompt(language, phase) }] },
         contents,
-        generationConfig: { temperature: 0.7, maxOutputTokens: 2048 },
+        generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
       }),
     });
 
@@ -545,10 +545,10 @@ async function tryOpenAICompatible(
         model,
         messages: [systemMsg, ...chatMessages],
         temperature: 0.7,
-        max_tokens: 2048,
+        max_tokens: 8192,
       }),
     });
-
+ 
     if (!res.ok) {
       const errText = (await res.text()).slice(0, 300);
       console.error(`[babel] ${label} error ${res.status}:`, errText);
@@ -626,6 +626,7 @@ export async function POST(req: NextRequest) {
       process.env.FALLBACK_API_KEY, 'Groq', diagnostics,
     );
     if (resultGroq) return NextResponse.json(resultGroq);
+    diagnostics[diagnostics.length - 1]?.error?.includes('image.png') && console.error('[babel] *** image.png ERROR from Groq ***');
 
     // 2. OpenRouter + Qwen3 (gratis)
     const resultTertiary = await tryOpenAICompatible(
@@ -634,11 +635,15 @@ export async function POST(req: NextRequest) {
       process.env.TERTIARY_API_KEY, 'OpenRouter', diagnostics,
     );
     if (resultTertiary) return NextResponse.json(resultTertiary);
+    const openRouterDiag = diagnostics[diagnostics.length - 1];
+    if (openRouterDiag?.error?.includes('image.png')) console.error('[babel] *** image.png ERROR from OpenRouter ***');
 
     // 3. Gemini
     if (process.env.GEMINI_API_KEY) {
       const result = await tryGemini(compactMessages, lang, currentPhase, diagnostics);
       if (result) return NextResponse.json(result);
+      const geminiDiag = diagnostics[diagnostics.length - 1];
+      if (geminiDiag?.error?.includes('image.png')) console.error('[babel] *** image.png ERROR from Gemini ***');
     }
 
     // 4. 9Router (proxy local con túnel, o VPS)
@@ -650,6 +655,8 @@ export async function POST(req: NextRequest) {
         process.env.ROUTER_API_KEY || 'no-key-needed', '9Router', diagnostics,
       );
       if (resultRouter) return NextResponse.json(resultRouter);
+      const routerDiag = diagnostics[diagnostics.length - 1];
+      if (routerDiag?.error?.includes('image.png')) console.error('[babel] *** image.png ERROR from 9Router ***');
     }
 
     // 5. Todos fallaron — devolver diagnóstico
@@ -667,9 +674,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const mainError = diagnostics.map(d => `${d.provider} (${d.status}): ${d.error.slice(0, 100)}`).join(' | ');
     return NextResponse.json(
       {
-        error: `Todos los proveedores fallaron (${configuredProviders.map((p) => p.name).join(', ')}). Revisa Vercel logs.`,
+        error: mainError,
         diagnostics,
         tip: 'API keys gratis: Groq → console.groq.com | OpenRouter → openrouter.ai/keys | 9Router → npm i -g 9router + cloudflared tunnel --url http://localhost:20128',
       },

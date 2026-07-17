@@ -77,6 +77,28 @@ export async function approveBabelPhase(
 }
 
 /**
+ * Actualiza el resumen de una fase aprobada. Busca la fase por su número y
+ * reemplaza su summary. Útil para que el usuario edite y precise el análisis
+ * generado por la IA después de aprobarlo.
+ */
+export async function updateBabelPhaseSummary(
+  uid: string,
+  phase: number,
+  newSummary: string
+): Promise<void> {
+  const db = getFirebaseDb();
+  const ref = doc(db, 'sessions', babelSessionId(uid));
+  const snap = await getDoc(ref);
+  const existing = (snap.data() as SessionDoc | undefined)?.phases ?? [];
+
+  const updated = existing.map((p) =>
+    p.phase === phase ? { ...p, summary: newSummary } : p
+  );
+
+  await updateDoc(ref, { phases: updated });
+}
+
+/**
  * /compilar — concatena los resúmenes de todas las fases aprobadas, en orden,
  * sin resumir ni recortar nada. Con solo Fase 0 implementada por ahora,
  * devuelve lo que haya aprobado hasta este momento.
