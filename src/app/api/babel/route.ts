@@ -483,7 +483,7 @@ async function tryGemini(
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: buildSystemPrompt(language, phase) }] },
         contents,
-        generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
+        generationConfig: { temperature: 0.7, maxOutputTokens: 2048 },
       }),
     });
 
@@ -545,7 +545,7 @@ async function tryOpenAICompatible(
         model,
         messages: [systemMsg, ...chatMessages],
         temperature: 0.7,
-        max_tokens: 8192,
+        max_tokens: 2048,
       }),
     });
 
