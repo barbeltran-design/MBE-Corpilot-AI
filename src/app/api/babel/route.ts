@@ -18,21 +18,19 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // Proveedores de IA con fallback.
 // Si Gemini falla (cuota agotada, modelo no disponible, error transitorio),
-// se intenta con DeepSeek automáticamente.
-// Configura DEEPSEEK_API_KEY en las variables de entorno de Vercel para activarlo.
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
-const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
-// Fallback gratuitos (OpenAI-compatible).
+// se intenta con Groq, luego OpenRouter automáticamente.
 //
-// Nivel 1 — Groq (completamente gratis, sin tarjeta, 30 req/min):
+// Gemini (gratis, cuota limitada):
+//   API key: https://aistudio.google.com/apikey
+//   Por defecto usa gemini-2.5-flash (2026).
+// Nivel 1 — Groq (completamente gratis, 30 req/min):
 //   API key: https://console.groq.com
-//   Modelo: llama-3.3-70b-versatile, mixtral-8x7b-32768, etc.
-//
-// Nivel 2 — OpenRouter con North Mini Code de Cohere (gratis):
-//   API key: https://openrouter.ai/keys (gratis, sin tarjeta)
-//   Modelo: cohere/north-mini-code:free (256K contexto, 30B MoE, código)
-//
-// Puedes cambiar cualquier proveedor solo configurando las variables de entorno.
+//   Modelo: llama-3.3-70b-versatile
+// Nivel 2 — OpenRouter (modelos gratuitos):
+//   API key: https://openrouter.ai/keys
+//   Modelo: qwen/qwen3-next-80b-a3b-instruct:free (262K contexto)
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 const FALLBACK_ENDPOINT = process.env.FALLBACK_ENDPOINT || 'https://api.groq.com/openai/v1/chat/completions';
 const FALLBACK_MODEL = process.env.FALLBACK_MODEL || 'llama-3.3-70b-versatile';
 const TERTIARY_ENDPOINT = process.env.TERTIARY_ENDPOINT || 'https://openrouter.ai/api/v1/chat/completions';
@@ -453,7 +451,7 @@ export async function GET() {
   });
 }
 
-// Intenta llamar a un proveedor Gemini (Google). Retorna { reply } o null si falla.
+// Intenta llamar a un proveedor Gemini (Google). Retorna { reply, error? } o null si no hay key.
 async function tryGemini(
   messages: IncomingMessage[],
   language: 'es' | 'en',
@@ -467,34 +465,39 @@ async function tryGemini(
     parts: [{ text: m.content }],
   }));
 
-  const res = await fetch(GEMINI_ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: buildSystemPrompt(language, phase) }] },
-      contents,
-      generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
-    }),
-  });
+  try {
+    const res = await fetch(GEMINI_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: buildSystemPrompt(language, phase) }] },
+        contents,
+        generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
+      }),
+    });
 
-  if (!res.ok) {
-    const errText = await res.text();
-    console.error(`[babel] Gemini error ${res.status}:`, errText.slice(0, 500));
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error(`[babel] Gemini error ${res.status}:`, errText.slice(0, 1000));
+      return null;
+    }
+
+    const data = await res.json();
+    const text =
+      data?.candidates?.[0]?.content?.parts
+        ?.map((p: { text?: string }) => p.text ?? '')
+        .join('') ?? '';
+    if (!text) {
+      const blockReason = data?.promptFeedback?.blockReason;
+      const blockMsg = data?.promptFeedback?.blockReasonMessage;
+      console.error(`[babel] Gemini no devolvió texto — blockReason: ${blockReason}, message: ${blockMsg}`);
+      return null;
+    }
+    return { reply: text };
+  } catch (fetchErr) {
+    console.error('[babel] Gemini fetch exception:', fetchErr);
     return null;
   }
-
-  const data = await res.json();
-  const text =
-    data?.candidates?.[0]?.content?.parts
-      ?.map((p: { text?: string }) => p.text ?? '')
-      .join('') ?? '';
-  if (!text) {
-    const blockReason = data?.promptFeedback?.blockReason;
-    const blockMsg = data?.promptFeedback?.blockReasonMessage;
-    console.error(`[babel] Gemini no devolvió texto — blockReason: ${blockReason}, message: ${blockMsg}`);
-    return null;
-  }
-  return { reply: text };
 }
 
 // Intenta llamar a un proveedor OpenAI-compatible. endpoint y model se pasan por parámetro.
@@ -542,6 +545,8 @@ async function tryOpenAICompatible(
 }
 
 export async function POST(req: NextRequest) {
+  const diagnostics: { provider: string; status: number; error: string }[] = [];
+
   try {
     let body: BabelRequestBody;
     try {
@@ -565,19 +570,17 @@ export async function POST(req: NextRequest) {
     if (process.env.GEMINI_API_KEY) {
       const result = await tryGemini(messages, lang, currentPhase);
       if (result) return NextResponse.json(result);
-      console.warn('[babel] Gemini falló, probando Groq...');
     }
 
-    // 2. Groq (fallback gratuito, Llama 3.3 70B)
+    // 2. Groq
     const resultGroq = await tryOpenAICompatible(
       messages, lang, currentPhase,
       FALLBACK_ENDPOINT, FALLBACK_MODEL,
       process.env.FALLBACK_API_KEY, 'Groq',
     );
     if (resultGroq) return NextResponse.json(resultGroq);
-    console.warn('[babel] Groq falló, probando OpenRouter/North Mini Code...');
 
-    // 3. OpenRouter + North Mini Code de Cohere (fallback gratuito, 256K contexto)
+    // 3. OpenRouter + Qwen3
     const resultTertiary = await tryOpenAICompatible(
       messages, lang, currentPhase,
       TERTIARY_ENDPOINT, TERTIARY_MODEL,
@@ -585,22 +588,26 @@ export async function POST(req: NextRequest) {
     );
     if (resultTertiary) return NextResponse.json(resultTertiary);
 
-    // 4. Todos fallaron
-    const keys = [
-      !!process.env.GEMINI_API_KEY && 'Gemini',
-      !!process.env.FALLBACK_API_KEY && 'Groq',
-      !!process.env.TERTIARY_API_KEY && 'OpenRouter',
-    ].filter(Boolean);
+    // 4. Todos fallaron — devolver diagnóstico
+    const keys: { label: string; key: string | undefined }[] = [
+      { label: 'Gemini', key: process.env.GEMINI_API_KEY },
+      { label: 'Groq', key: process.env.FALLBACK_API_KEY },
+      { label: 'OpenRouter', key: process.env.TERTIARY_API_KEY },
+    ];
 
-    if (keys.length === 0) {
+    const configured = keys.filter((k) => k.key);
+    if (configured.length === 0) {
       return NextResponse.json(
-        { error: 'No hay API key configurada. Agrega al menos GEMINI_API_KEY, FALLBACK_API_KEY (Groq gratis) o TERTIARY_API_KEY (OpenRouter/North Mini Code gratis).' },
+        { error: 'No hay API key configurada. Configura al menos GEMINI_API_KEY (Gemini gratis) en Vercel > Settings > Environment Variables.' },
         { status: 500 },
       );
     }
 
     return NextResponse.json(
-      { error: `Todos los proveedores fallaron (${keys.join(', ')}). Revisa logs del servidor.` },
+      {
+        error: `Todos los proveedores fallaron. Revisa que las API keys en Vercel sean correctas y tengan saldo/cuota disponible.`,
+        configured: configured.map((k) => k.label),
+      },
       { status: 502 },
     );
   } catch (err) {
