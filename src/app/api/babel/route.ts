@@ -32,7 +32,7 @@ import { NextRequest, NextResponse } from 'next/server';
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 const FALLBACK_ENDPOINT = process.env.FALLBACK_ENDPOINT || 'https://api.groq.com/openai/v1/chat/completions';
-const FALLBACK_MODEL = process.env.FALLBACK_MODEL || 'llama-3.3-70b-versatile';
+const FALLBACK_MODEL = process.env.FALLBACK_MODEL || 'llama-3.1-8b-instant';
 const TERTIARY_ENDPOINT = process.env.TERTIARY_ENDPOINT || 'https://openrouter.ai/api/v1/chat/completions';
 const TERTIARY_MODEL = process.env.TERTIARY_MODEL || 'meta-llama/llama-3.3-70b-instruct:free';
 
