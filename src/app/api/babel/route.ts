@@ -500,7 +500,8 @@ async function tryGemini(
   }
 }
 
-// Intenta llamar a un proveedor OpenAI-compatible. endpoint y model se pasan por parámetro.
+// Intenta llamar a un proveedor OpenAI-compatible. Retorna { reply } o null.
+// Los errores se agregan al arreglo diagnostics.
 async function tryOpenAICompatible(
   messages: IncomingMessage[],
   language: 'es' | 'en',
@@ -509,6 +510,7 @@ async function tryOpenAICompatible(
   model: string,
   apiKey: string | undefined,
   label: string,
+  diagnostics: { provider: string; status: number; error: string }[],
 ): Promise<{ reply: string } | null> {
   if (!apiKey) return null;
 
@@ -518,30 +520,38 @@ async function tryOpenAICompatible(
     content: m.content,
   }));
 
-  const res = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model,
-      messages: [systemMsg, ...chatMessages],
-      temperature: 0.7,
-      max_tokens: 8192,
-    }),
-  });
+  try {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        messages: [systemMsg, ...chatMessages],
+        temperature: 0.7,
+        max_tokens: 8192,
+      }),
+    });
 
-  if (!res.ok) {
-    const errText = await res.text();
-    console.error(`[babel] ${label} error ${res.status}:`, errText.slice(0, 500));
+    if (!res.ok) {
+      const errText = (await res.text()).slice(0, 300);
+      console.error(`[babel] ${label} error ${res.status}:`, errText);
+      diagnostics.push({ provider: label, status: res.status, error: errText });
+      return null;
+    }
+
+    const data = await res.json();
+    const text = data?.choices?.[0]?.message?.content ?? '';
+    if (!text) {
+      console.error(`[babel] ${label} no devolvió texto`);
+      diagnostics.push({ provider: label, status: 200, error: 'Respuesta vacía' });
+      return null;
+    }
+    return { reply: text };
+  } catch (fetchErr) {
+    console.error(`[babel] ${label} fetch exception:`, fetchErr);
+    diagnostics.push({ provider: label, status: 0, error: String(fetchErr) });
     return null;
   }
-
-  const data = await res.json();
-  const text = data?.choices?.[0]?.message?.content ?? '';
-  if (!text) {
-    console.error(`[babel] ${label} no devolvió texto`);
-    return null;
-  }
-  return { reply: text };
 }
 
 export async function POST(req: NextRequest) {
@@ -566,47 +576,47 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 1. Gemini (proveedor principal)
+    // 1. Groq (más fiable, gratis, 30 req/min)
+    const resultGroq = await tryOpenAICompatible(
+      messages, lang, currentPhase,
+      FALLBACK_ENDPOINT, FALLBACK_MODEL,
+      process.env.FALLBACK_API_KEY, 'Groq', diagnostics,
+    );
+    if (resultGroq) return NextResponse.json(resultGroq);
+
+    // 2. OpenRouter + Qwen3 (gratis)
+    const resultTertiary = await tryOpenAICompatible(
+      messages, lang, currentPhase,
+      TERTIARY_ENDPOINT, TERTIARY_MODEL,
+      process.env.TERTIARY_API_KEY, 'OpenRouter', diagnostics,
+    );
+    if (resultTertiary) return NextResponse.json(resultTertiary);
+
+    // 3. Gemini (último recurso)
     if (process.env.GEMINI_API_KEY) {
       const result = await tryGemini(messages, lang, currentPhase);
       if (result) return NextResponse.json(result);
     }
 
-    // 2. Groq
-    const resultGroq = await tryOpenAICompatible(
-      messages, lang, currentPhase,
-      FALLBACK_ENDPOINT, FALLBACK_MODEL,
-      process.env.FALLBACK_API_KEY, 'Groq',
-    );
-    if (resultGroq) return NextResponse.json(resultGroq);
-
-    // 3. OpenRouter + Qwen3
-    const resultTertiary = await tryOpenAICompatible(
-      messages, lang, currentPhase,
-      TERTIARY_ENDPOINT, TERTIARY_MODEL,
-      process.env.TERTIARY_API_KEY, 'OpenRouter',
-    );
-    if (resultTertiary) return NextResponse.json(resultTertiary);
-
     // 4. Todos fallaron — devolver diagnóstico
-    const keys: { label: string; key: string | undefined }[] = [
-      { label: 'Gemini', key: process.env.GEMINI_API_KEY },
-      { label: 'Groq', key: process.env.FALLBACK_API_KEY },
-      { label: 'OpenRouter', key: process.env.TERTIARY_API_KEY },
-    ];
+    const configured = [
+      process.env.FALLBACK_API_KEY && 'Groq',
+      process.env.TERTIARY_API_KEY && 'OpenRouter',
+      process.env.GEMINI_API_KEY && 'Gemini',
+    ].filter(Boolean);
 
-    const configured = keys.filter((k) => k.key);
     if (configured.length === 0) {
       return NextResponse.json(
-        { error: 'No hay API key configurada. Configura al menos GEMINI_API_KEY (Gemini gratis) en Vercel > Settings > Environment Variables.' },
+        { error: 'No hay API key configurada. Configura al menos FALLBACK_API_KEY (Groq gratis) en Vercel > Settings > Environment Variables.' },
         { status: 500 },
       );
     }
 
     return NextResponse.json(
       {
-        error: `Todos los proveedores fallaron. Revisa que las API keys en Vercel sean correctas y tengan saldo/cuota disponible.`,
-        configured: configured.map((k) => k.label),
+        error: `Los 3 proveedores fallaron. Revisa que las API Keys en Vercel sean válidas.`,
+        diagnostics,
+        tip: 'Crea API keys gratis en: Groq → console.groq.com, OpenRouter → openrouter.ai/keys, Gemini → aistudio.google.com/apikey',
       },
       { status: 502 },
     );
