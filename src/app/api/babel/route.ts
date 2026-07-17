@@ -633,23 +633,22 @@ export async function POST(req: NextRequest) {
     }
 
     // 4. 9Router (proxy local con túnel, o VPS)
-    // Solo se intenta si ROUTER_ENDPOINT no es el default localhost
-    const routerKey = process.env.ROUTER_ENDPOINT !== 'http://localhost:20128/v1'
-      ? (process.env.ROUTER_API_KEY || 'no-key-needed')
-      : undefined;
-    const resultRouter = await tryOpenAICompatible(
-      compactMessages, lang, currentPhase,
-      ROUTER_ENDPOINT, ROUTER_MODEL,
-      routerKey, '9Router', diagnostics,
-    );
-    if (resultRouter) return NextResponse.json(resultRouter);
+    // Solo se intenta si configuraste ROUTER_ENDPOINT explícitamente en Vercel
+    if (process.env.ROUTER_ENDPOINT) {
+      const resultRouter = await tryOpenAICompatible(
+        compactMessages, lang, currentPhase,
+        ROUTER_ENDPOINT, ROUTER_MODEL,
+        process.env.ROUTER_API_KEY || 'no-key-needed', '9Router', diagnostics,
+      );
+      if (resultRouter) return NextResponse.json(resultRouter);
+    }
 
     // 5. Todos fallaron — devolver diagnóstico
     const configuredProviders = [
       { name: 'Groq', key: process.env.FALLBACK_API_KEY, hasKey: !!process.env.FALLBACK_API_KEY },
       { name: 'OpenRouter', key: process.env.TERTIARY_API_KEY, hasKey: !!process.env.TERTIARY_API_KEY },
       { name: 'Gemini', key: process.env.GEMINI_API_KEY, hasKey: !!process.env.GEMINI_API_KEY },
-      { name: '9Router', key: process.env.ROUTER_API_KEY, hasKey: process.env.ROUTER_ENDPOINT !== 'http://localhost:20128/v1' },
+      { name: '9Router', key: process.env.ROUTER_API_KEY, hasKey: !!process.env.ROUTER_ENDPOINT },
     ].filter((p) => p.hasKey);
 
     if (configuredProviders.length === 0) {
