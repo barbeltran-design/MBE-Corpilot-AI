@@ -451,14 +451,18 @@ export async function GET() {
   });
 }
 
-// Intenta llamar a un proveedor Gemini (Google). Retorna { reply, error? } o null si no hay key.
+// Intenta llamar a un proveedor Gemini (Google). Retorna { reply } o null.
 async function tryGemini(
   messages: IncomingMessage[],
   language: 'es' | 'en',
   phase: number,
+  diagnostics: { provider: string; status: number; error: string }[],
 ): Promise<{ reply: string } | null> {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
+  if (!apiKey) {
+    diagnostics.push({ provider: 'Gemini', status: 0, error: 'API key no configurada en Vercel' });
+    return null;
+  }
 
   const contents = messages.map((m) => ({
     role: m.role === 'assistant' ? 'model' : 'user',
@@ -477,8 +481,9 @@ async function tryGemini(
     });
 
     if (!res.ok) {
-      const errText = await res.text();
-      console.error(`[babel] Gemini error ${res.status}:`, errText.slice(0, 1000));
+      const errText = (await res.text()).slice(0, 300);
+      console.error(`[babel] Gemini error ${res.status}:`, errText);
+      diagnostics.push({ provider: 'Gemini', status: res.status, error: errText });
       return null;
     }
 
@@ -491,11 +496,13 @@ async function tryGemini(
       const blockReason = data?.promptFeedback?.blockReason;
       const blockMsg = data?.promptFeedback?.blockReasonMessage;
       console.error(`[babel] Gemini no devolvió texto — blockReason: ${blockReason}, message: ${blockMsg}`);
+      diagnostics.push({ provider: 'Gemini', status: 200, error: `Blocked: ${blockReason} — ${blockMsg}` });
       return null;
     }
     return { reply: text };
   } catch (fetchErr) {
     console.error('[babel] Gemini fetch exception:', fetchErr);
+    diagnostics.push({ provider: 'Gemini', status: 0, error: String(fetchErr) });
     return null;
   }
 }
@@ -512,7 +519,10 @@ async function tryOpenAICompatible(
   label: string,
   diagnostics: { provider: string; status: number; error: string }[],
 ): Promise<{ reply: string } | null> {
-  if (!apiKey) return null;
+  if (!apiKey) {
+    diagnostics.push({ provider: label, status: 0, error: 'API key no configurada en Vercel' });
+    return null;
+  }
 
   const systemMsg = { role: 'system', content: buildSystemPrompt(language, phase) };
   const chatMessages = messages.map((m) => ({
@@ -594,7 +604,7 @@ export async function POST(req: NextRequest) {
 
     // 3. Gemini (último recurso)
     if (process.env.GEMINI_API_KEY) {
-      const result = await tryGemini(messages, lang, currentPhase);
+      const result = await tryGemini(messages, lang, currentPhase, diagnostics);
       if (result) return NextResponse.json(result);
     }
 
