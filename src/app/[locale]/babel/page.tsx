@@ -115,19 +115,20 @@ export default function BabelPage() {
     const answer = input.trim();
     setInput('');
     setSending(true);
+    setError(null);
 
-    const updatedAnswers = { ...phase0Answers, [questions[currentQuestionIndex].key]: answer };
-    setPhase0Answers(updatedAnswers);
+    try {
+      const updatedAnswers = { ...phase0Answers, [questions[currentQuestionIndex].key]: answer };
+      setPhase0Answers(updatedAnswers);
 
-    const userMsg: ChatMessage = {
-      role: 'user',
-      content: answer,
-      timestamp: Timestamp.now(),
-    };
+      const userMsg: ChatMessage = {
+        role: 'user',
+        content: answer,
+        timestamp: Timestamp.now(),
+      };
 
-    if (currentQuestionIndex === questions.length - 1) {
-      // ÚLTIMA PREGUNTA: Enviar todo a la API
-      try {
+      if (currentQuestionIndex === questions.length - 1) {
+        // ÚLTIMA PREGUNTA: Enviar todo a la API
         const phase0Summary = Object.entries(updatedAnswers)
           .map(([key, value]) => `**${key}**: ${value}`)
           .join('\n\n');
@@ -163,33 +164,31 @@ export default function BabelPage() {
         const finalMessages = [...allMessages, assistantMsg];
         setSession((prev) => (prev ? { ...prev, messages: finalMessages } : prev));
         await saveBabelMessages(uid, finalMessages);
-        setIsPhase0Complete(true); // Esto saldrá del modo wizard y entrará al chat normal
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Error al procesar');
-      } finally {
-        setSending(false);
+        setIsPhase0Complete(true);
+      } else {
+        // PREGUNTAS INTERMEDIAS: Guardar y avanzar automáticamente
+        const updatedMessages = [...session.messages, userMsg];
+        setSession((prev) => (prev ? { ...prev, messages: updatedMessages } : prev));
+        await saveBabelMessages(uid, updatedMessages);
+        
+        const nextIndex = currentQuestionIndex + 1;
+        setCurrentQuestionIndex(nextIndex);
+        
+        // Inyectar la siguiente pregunta automáticamente
+        const nextQuestion = questions[nextIndex];
+        const nextQuestionMsg: ChatMessage = {
+          role: 'assistant',
+          content: nextQuestion.question,
+          timestamp: Timestamp.now(),
+        };
+        
+        const messagesWithNextQuestion = [...updatedMessages, nextQuestionMsg];
+        setSession((prev) => (prev ? { ...prev, messages: messagesWithNextQuestion } : prev));
+        await saveBabelMessages(uid, messagesWithNextQuestion);
       }
-    } else {
-      // PREGUNTAS INTERMEDIAS: Guardar y avanzar automáticamente
-      const updatedMessages = [...session.messages, userMsg];
-      setSession((prev) => (prev ? { ...prev, messages: updatedMessages } : prev));
-      await saveBabelMessages(uid, updatedMessages);
-      
-      const nextIndex = currentQuestionIndex + 1;
-      setCurrentQuestionIndex(nextIndex);
-      
-      // Inyectar la siguiente pregunta automáticamente
-      const nextQuestion = questions[nextIndex];
-      const nextQuestionMsg: ChatMessage = {
-        role: 'assistant',
-        content: nextQuestion.question, // <-- CORREGIDO: .question
-        timestamp: Timestamp.now(),
-      };
-      
-      const messagesWithNextQuestion = [...updatedMessages, nextQuestionMsg];
-      setSession((prev) => (prev ? { ...prev, messages: messagesWithNextQuestion } : prev));
-      await saveBabelMessages(uid, messagesWithNextQuestion);
-      
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al procesar');
+    } finally {
       setSending(false);
     }
   }
