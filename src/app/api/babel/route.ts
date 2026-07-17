@@ -36,7 +36,7 @@ const TERTIARY_MODEL = process.env.TERTIARY_MODEL || 'meta-llama/llama-3.3-70b-i
 // Configura ROUTER_ENDPOINT con la URL pública de tu 9Router (túnel o VPS).
 // Ejemplo: https://tu-tunel.cloudflare.dev/v1
 const ROUTER_ENDPOINT = process.env.ROUTER_ENDPOINT || 'http://localhost:20128/v1';
-const ROUTER_MODEL = process.env.ROUTER_MODEL || 'kr/claude-sonnet-4.5';
+const ROUTER_MODEL = process.env.ROUTER_MODEL || 'oc/qwen3-coder-plus';
 
 interface IncomingMessage {
   role: 'user' | 'assistant';
