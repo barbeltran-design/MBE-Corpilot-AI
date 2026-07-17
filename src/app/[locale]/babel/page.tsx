@@ -13,6 +13,7 @@ import {
   compileApprovedPhases,
 } from '@/lib/babel-session';
 import { BABEL_IMPLEMENTED_PHASES, babelApprovalMarker } from '@/lib/babel-constants';
+import { createCompiledPlanDeliverable } from '@/lib/deliverables';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import type { ChatMessage, SessionDoc } from '@/types/firestore';
@@ -35,12 +36,12 @@ const PHASE_0_QUESTIONS = {
     { key: 'giro', question: '### 1. Business Type and Niche\n\nWhat exactly do you sell and who is it for?' },
     { key: 'ubicacion', question: '### 2. Operational Location\n\nIn which city, state and country will the business operate?' },
     { key: 'madurez', question: '### 3. Current Maturity\n\nIs it an idea on paper, a validated product or service, or an ongoing business seeking to scale?' },
-    { key: 'recursos', question: '### 4. Available Resources\n\nWhat material, human, intelectual and financial resources do you currently have?' },
+    { key: 'recursos', question: '### 4. Available Resources\n\nWhat material, human, intellectual and financial resources do you currently have?' },
     { key: 'ambicion', question: '### 5. Financial Ambition Level\n\nAre you looking to create sustainable self-employment or a scalable structure to raise capital from investors?' },
     { key: 'mision_vision', question: '### 6. Shared Goal, Mission and Vision\n\nDo you already have them defined or would you prefer us to design them from scratch?' },
     { key: 'utilidad_deseada', question: '### 7. Desired Monthly Profit\n\nHow much net profit would you like to have left over each month to live on? (in your local currency)' },
     { key: 'sueldo_founder', question: '### 8. Founder\'s Salary\n\nIf you\'re going to run the business, what salary would you assign yourself to cover up to 3 roles, which would be the same as what you would pay another person to perform each role? (Administration, Commercial, Operations)' },
-    { key: 'gastos_fijos', question: '### 9. Fixed Costs\n\nWhat fixed costs (rent, services, software) do you pay even if you don´t sale anything?' },
+    { key: 'gastos_fijso', question: '### 9. Fixed Costs\n\nWhat fixed costs (rent, services, software) do you pay even if you don´t sale anything?' },
     { key: 'gastos_variables', question: '### 10. Variable Costs\n\nWhat variable costs (raw materials, commissions) do you identify to deliver your product or service?' }
   ]
 };
@@ -256,6 +257,25 @@ export default function BabelPage() {
       const compiledText = compiled ? `### Plan Estratégico Compilado\n\n${compiled}` : 'No hay fases aprobadas para compilar aún.';
       const userMsg: ChatMessage = { role: 'user', content: '/compilar', timestamp: Timestamp.now() };
       const assistantMsg: ChatMessage = { role: 'assistant', content: compiledText, timestamp: Timestamp.now() };
+
+      if (compiled) {
+        try {
+          const deliverable = await createCompiledPlanDeliverable({
+            uid,
+            agentId: 'babel',
+            sessionTopic: session.topic,
+            compiledText: compiled,
+            language: locale,
+          });
+          assistantMsg.deliverables = [deliverable];
+        } catch (deliverableErr) {
+          // No bloquea el compilado en pantalla si falla la generación del PDF
+          // (p. ej. reglas de Storage no configuradas todavía) — el usuario
+          // igual ve su plan compilado, solo sin el link de descarga.
+          console.error('[babel] No se pudo generar el PDF del plan compilado', deliverableErr);
+        }
+      }
+
       const finalMessages = [...session.messages, userMsg, assistantMsg];
       setSession({ ...session, messages: finalMessages });
       setInput('');
@@ -361,6 +381,21 @@ export default function BabelPage() {
         {session.messages.map((m, i) => (
           <div key={i} className={`max-w-[85%] whitespace-pre-wrap rounded-xl px-3.5 py-2 text-sm ${m.role === 'user' ? 'ml-auto bg-slate-900 text-white' : 'bg-slate-100 text-slate-900'}`}>
             {m.content}
+            {m.deliverables && m.deliverables.length > 0 && (
+              <div className="mt-2 flex flex-col gap-1 border-t border-slate-200 pt-2">
+                {m.deliverables.map((d, di) => (
+                  <a
+                    key={di}
+                    href={d.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900"
+                  >
+                    📄 {t('downloadDeliverable')}: {d.name}
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
         ))}
         {sending && (
