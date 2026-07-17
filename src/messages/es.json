@@ -130,6 +130,8 @@
     "compileHeader": "### Tu Plan de Negocio Estratégico Socioambiental — Compilado",
     "compileEmpty": "Todavía no has aprobado ninguna fase, así que no hay nada que compilar. Aprueba al menos la Fase 0 y vuelve a intentarlo.",
     "compileHint": "Escribe /compilar en cualquier momento para juntar en un solo documento todas las fases que ya has aprobado.",
+        "downloadDeliverable": "Descargar PDF",
     "errorGeneric": "Algo salió mal hablando con Babel. Intenta de nuevo."
   }
 }
+  
