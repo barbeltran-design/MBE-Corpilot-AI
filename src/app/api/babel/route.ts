@@ -586,9 +586,15 @@ export async function POST(req: NextRequest) {
     const lang: 'es' | 'en' = language === 'en' ? 'en' : 'es';
     const currentPhase = phase ?? 0;
 
-    // Fase 0: si el frontend manda phase0Complete, construimos un payload
-    // compacto con solo el resumen de respuestas, en vez de todo el historial
-    // (que excede los ~10k tokens y provoca rate-limits 429/413).
+    // Reducción de tokens: en vez de enviar todo el historial, enviamos solo
+    // lo esencial.
+    //
+    // Fase 0 (última pregunta): usamos el resumen phase0Data (~500 tokens)
+    // en vez del historial completo (~8000 tokens).
+    //
+    // Fases 1-5: solo enviamos los últimos 10 mensajes del chat. El system
+    // prompt ya contiene las instrucciones completas de la fase actual, y
+    // los mensajes anteriores son redundantes.
     let compactMessages = messages;
     if (phase0Complete && phase0Data) {
       const summary = Object.entries(phase0Data)
@@ -601,6 +607,9 @@ export async function POST(req: NextRequest) {
       compactMessages = [
         { role: 'user', content: `${intro}\n\n${summary}` },
       ];
+    } else if (currentPhase >= 1 && messages.length > 10) {
+      // En fases 1-5, solo los últimos 10 mensajes (5 turnos)
+      compactMessages = messages.slice(-10);
     }
 
     if (!Array.isArray(compactMessages) || compactMessages.length === 0) {
