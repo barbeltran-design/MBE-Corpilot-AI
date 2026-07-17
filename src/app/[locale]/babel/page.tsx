@@ -12,8 +12,8 @@ import {
   approveBabelPhase,
   compileApprovedPhases,
 } from '@/lib/babel-session';
-import { BABEL_IMPLEMENTED_PHASES, babelApprovalMarker } from '@/lib/babel-constants';
 import { createCompiledPlanDeliverable } from '@/lib/deliverables';
+import { BABEL_IMPLEMENTED_PHASES, babelApprovalMarker } from '@/lib/babel-constants';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import type { ChatMessage, SessionDoc } from '@/types/firestore';
@@ -41,7 +41,7 @@ const PHASE_0_QUESTIONS = {
     { key: 'mision_vision', question: '### 6. Shared Goal, Mission and Vision\n\nDo you already have them defined or would you prefer us to design them from scratch?' },
     { key: 'utilidad_deseada', question: '### 7. Desired Monthly Profit\n\nHow much net profit would you like to have left over each month to live on? (in your local currency)' },
     { key: 'sueldo_founder', question: '### 8. Founder\'s Salary\n\nIf you\'re going to run the business, what salary would you assign yourself to cover up to 3 roles, which would be the same as what you would pay another person to perform each role? (Administration, Commercial, Operations)' },
-    { key: 'gastos_fijso', question: '### 9. Fixed Costs\n\nWhat fixed costs (rent, services, software) do you pay even if you don´t sale anything?' },
+    { key: 'gastos_fijos', question: '### 9. Fixed Costs\n\nWhat fixed costs (rent, services, software) do you pay even if you don´t sale anything?' },
     { key: 'gastos_variables', question: '### 10. Variable Costs\n\nWhat variable costs (raw materials, commissions) do you identify to deliver your product or service?' }
   ]
 };
@@ -162,7 +162,7 @@ export default function BabelPage() {
         const finalMessages = [...allMessages, assistantMsg];
         setSession((prev) => (prev ? { ...prev, messages: finalMessages } : prev));
         await saveBabelMessages(uid, finalMessages);
-        setIsPhase0Complete(true); // Esto saldrá del modo wizard y entrará al chat normal
+        setIsPhase0Complete(true);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Error al procesar');
       } finally {
@@ -177,11 +177,10 @@ export default function BabelPage() {
       const nextIndex = currentQuestionIndex + 1;
       setCurrentQuestionIndex(nextIndex);
       
-      // Inyectar la siguiente pregunta automáticamente
       const nextQuestion = questions[nextIndex];
       const nextQuestionMsg: ChatMessage = {
         role: 'assistant',
-        content: nextQuestion.question, // <-- CORREGIDO: .question
+        content: nextQuestion.question,
         timestamp: Timestamp.now(),
       };
       
@@ -236,6 +235,7 @@ export default function BabelPage() {
     }
   }
 
+  // 6. Aprobar fase (CORREGIDO con ?? 0)
   async function handleApprove() {
     if (!uid || !session || !lastMessage) return;
     setSending(true);
@@ -244,10 +244,8 @@ export default function BabelPage() {
       await approveBabelPhase(uid, currentPhase, lastMessage.content, locale);
       const refreshed = await getOrCreateBabelSession(uid, locale);
 
-      if (refreshed.currentPhase >= BABEL_IMPLEMENTED_PHASES) {
-        // Se acaba de aprobar la última fase (Fase 5). No hay una fase
-        // siguiente que pedirle a Gemini: allPhasesDone pasa a true y el
-        // textarea se vuelve a habilitar solo, listo para "/compilar".
+      // CORRECCIÓN: Usar ?? 0 para evitar error de TypeScript si currentPhase es undefined
+      if ((refreshed.currentPhase ?? 0) >= BABEL_IMPLEMENTED_PHASES) {
         setSession(refreshed);
         return;
       }
@@ -266,7 +264,7 @@ export default function BabelPage() {
         body: JSON.stringify({
           messages: historyForApi.map((m) => ({ role: m.role, content: m.content })),
           language: locale,
-          phase: refreshed.currentPhase,
+          phase: refreshed.currentPhase ?? 0,
         }),
       });
       const data = await res.json();
@@ -302,15 +300,12 @@ export default function BabelPage() {
           const deliverable = await createCompiledPlanDeliverable({
             uid,
             agentId: 'babel',
-            sessionTopic: session.topic,
+            sessionTopic: (session as any).topic || 'Plan Estratégico',
             compiledText: compiled,
             language: locale,
           });
           assistantMsg.deliverables = [deliverable];
         } catch (deliverableErr) {
-          // No bloquea el compilado en pantalla si falla la generación del PDF
-          // (p. ej. reglas de Storage no configuradas todavía) — el usuario
-          // igual ve su plan compilado, solo sin el link de descarga.
           console.error('[babel] No se pudo generar el PDF del plan compilado', deliverableErr);
         }
       }
@@ -350,7 +345,6 @@ export default function BabelPage() {
           <Button onClick={handleLogout} variant="outline" size="sm">Cerrar sesión</Button>
         </div>
 
-        {/* Historial de respuestas previas */}
         {session.messages.length > 0 && (
           <Card className="flex-1 space-y-3 overflow-y-auto p-4 max-h-[40vh]">
             {session.messages.map((m, i) => (
@@ -361,13 +355,11 @@ export default function BabelPage() {
           </Card>
         )}
 
-        {/* Barra de progreso */}
         <div className="w-full bg-slate-200 rounded-full h-2">
           <div className="bg-blue-600 h-2 rounded-full transition-all" style={{ width: `${((currentQuestionIndex + 1) / questions.length) * 100}%` }} />
         </div>
         <p className="text-sm text-slate-600">Pregunta {currentQuestionIndex + 1} de {questions.length}</p>
 
-        {/* Pregunta actual y formulario */}
         <Card className="p-6">
           <div className="whitespace-pre-wrap text-slate-900 mb-4 font-medium">
             {questions[currentQuestionIndex].question}
@@ -375,7 +367,7 @@ export default function BabelPage() {
           
           <form
             onSubmit={(e) => {
-              e.preventDefault(); // Previene el envío con Enter
+              e.preventDefault();
               handlePhase0Answer();
             }}
             className="flex gap-2 items-end"
@@ -384,7 +376,6 @@ export default function BabelPage() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
-                // Enter sin Shift = NO envía (permite nueva línea)
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
                 }
@@ -430,7 +421,7 @@ export default function BabelPage() {
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900"
                   >
-                    📄 {t('downloadDeliverable')}: {d.name}
+                    📄 {t('download') || 'Descargar'}: {d.name}
                   </a>
                 ))}
               </div>
@@ -464,7 +455,7 @@ export default function BabelPage() {
 
         <form
           onSubmit={(e) => {
-            e.preventDefault(); // Previene el envío con Enter
+            e.preventDefault();
             if (input.trim() === '/compilar' && allPhasesDone) {
               handleCompile();
             } else {
@@ -477,7 +468,6 @@ export default function BabelPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
-              // Enter sin Shift = NO envía (permite nueva línea)
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
               }
