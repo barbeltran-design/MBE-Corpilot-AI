@@ -34,7 +34,7 @@ const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models
 const FALLBACK_ENDPOINT = process.env.FALLBACK_ENDPOINT || 'https://api.groq.com/openai/v1/chat/completions';
 const FALLBACK_MODEL = process.env.FALLBACK_MODEL || 'llama-3.3-70b-versatile';
 const TERTIARY_ENDPOINT = process.env.TERTIARY_ENDPOINT || 'https://openrouter.ai/api/v1/chat/completions';
-const TERTIARY_MODEL = process.env.TERTIARY_MODEL || 'qwen/qwen3-next-80b-a3b-instruct:free';
+const TERTIARY_MODEL = process.env.TERTIARY_MODEL || 'meta-llama/llama-3.3-70b-instruct:free';
 
 interface IncomingMessage {
   role: 'user' | 'assistant';
