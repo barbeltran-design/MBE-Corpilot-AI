@@ -423,7 +423,7 @@ export default function BabelPage() {
             {m.deliverables && m.deliverables.length > 0 && (
               <div className="mt-2 flex flex-col gap-1 border-t border-slate-200 pt-2">
                 {m.deliverables.map((d, di) => (
-                  
+                  <a
                     key={di}
                     href={d.url}
                     target="_blank"
