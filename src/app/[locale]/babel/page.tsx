@@ -239,10 +239,49 @@ export default function BabelPage() {
   async function handleApprove() {
     if (!uid || !session || !lastMessage) return;
     setSending(true);
+    setError(null);
     try {
       await approveBabelPhase(uid, currentPhase, lastMessage.content, locale);
       const refreshed = await getOrCreateBabelSession(uid, locale);
-      setSession(refreshed);
+
+      if (refreshed.currentPhase >= BABEL_IMPLEMENTED_PHASES) {
+        // Se acaba de aprobar la última fase (Fase 5). No hay una fase
+        // siguiente que pedirle a Gemini: allPhasesDone pasa a true y el
+        // textarea se vuelve a habilitar solo, listo para "/compilar".
+        setSession(refreshed);
+        return;
+      }
+
+      const approvalMsg: ChatMessage = {
+        role: 'user',
+        content: locale === 'en' ? "I approve, let's continue." : 'Apruebo, continuemos.',
+        timestamp: Timestamp.now(),
+      };
+      const historyForApi = [...refreshed.messages, approvalMsg];
+      setSession({ ...refreshed, messages: historyForApi });
+
+      const res = await fetch('/api/babel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: historyForApi.map((m) => ({ role: m.role, content: m.content })),
+          language: locale,
+          phase: refreshed.currentPhase,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Error genérico');
+
+      const assistantMsg: ChatMessage = {
+        role: 'assistant',
+        content: data.reply as string,
+        timestamp: Timestamp.now(),
+      };
+      const finalMessages = [...historyForApi, assistantMsg];
+      setSession((prev) => (prev ? { ...prev, messages: finalMessages } : { ...refreshed, messages: finalMessages }));
+      await saveBabelMessages(uid, finalMessages);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error genérico');
     } finally {
       setSending(false);
     }
