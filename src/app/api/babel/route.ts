@@ -489,7 +489,9 @@ async function tryGemini(
       ?.map((p: { text?: string }) => p.text ?? '')
       .join('') ?? '';
   if (!text) {
-    console.error('[babel] Gemini no devolvió texto, blockReason:', data?.promptFeedback?.blockReason);
+    const blockReason = data?.promptFeedback?.blockReason;
+    const blockMsg = data?.promptFeedback?.blockReasonMessage;
+    console.error(`[babel] Gemini no devolvió texto — blockReason: ${blockReason}, message: ${blockMsg}`);
     return null;
   }
   return { reply: text };
