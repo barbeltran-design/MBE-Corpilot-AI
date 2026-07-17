@@ -626,12 +626,6 @@ export async function POST(req: NextRequest) {
     );
     if (resultTertiary) return NextResponse.json(resultTertiary);
 
-    // 3. Gemini (último recurso)
-    if (process.env.GEMINI_API_KEY) {
-      const result = await tryGemini(compactMessages, lang, currentPhase, diagnostics);
-      if (result) return NextResponse.json(result);
-    }
-
     // 3. Gemini
     if (process.env.GEMINI_API_KEY) {
       const result = await tryGemini(compactMessages, lang, currentPhase, diagnostics);
@@ -639,22 +633,26 @@ export async function POST(req: NextRequest) {
     }
 
     // 4. 9Router (proxy local con túnel, o VPS)
+    // Solo se intenta si ROUTER_ENDPOINT no es el default localhost
+    const routerKey = process.env.ROUTER_ENDPOINT !== 'http://localhost:20128/v1'
+      ? (process.env.ROUTER_API_KEY || 'no-key-needed')
+      : undefined;
     const resultRouter = await tryOpenAICompatible(
       compactMessages, lang, currentPhase,
       ROUTER_ENDPOINT, ROUTER_MODEL,
-      process.env.ROUTER_API_KEY || 'no-key-needed', '9Router', diagnostics,
+      routerKey, '9Router', diagnostics,
     );
     if (resultRouter) return NextResponse.json(resultRouter);
 
     // 5. Todos fallaron — devolver diagnóstico
-    const configured = [
-      process.env.FALLBACK_API_KEY && 'Groq',
-      process.env.TERTIARY_API_KEY && 'OpenRouter',
-      process.env.GEMINI_API_KEY && 'Gemini',
-      process.env.ROUTER_ENDPOINT && '9Router',
-    ].filter(Boolean);
+    const configuredProviders = [
+      { name: 'Groq', key: process.env.FALLBACK_API_KEY, hasKey: !!process.env.FALLBACK_API_KEY },
+      { name: 'OpenRouter', key: process.env.TERTIARY_API_KEY, hasKey: !!process.env.TERTIARY_API_KEY },
+      { name: 'Gemini', key: process.env.GEMINI_API_KEY, hasKey: !!process.env.GEMINI_API_KEY },
+      { name: '9Router', key: process.env.ROUTER_API_KEY, hasKey: process.env.ROUTER_ENDPOINT !== 'http://localhost:20128/v1' },
+    ].filter((p) => p.hasKey);
 
-    if (configured.length === 0) {
+    if (configuredProviders.length === 0) {
       return NextResponse.json(
         { error: 'No hay API key configurada. Configura al menos FALLBACK_API_KEY (Groq gratis) en Vercel > Settings > Environment Variables.' },
         { status: 500 },
@@ -663,9 +661,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(
       {
-        error: `Los 3 proveedores fallaron. Revisa que las API Keys en Vercel sean válidas.`,
+        error: `Todos los proveedores fallaron (${configuredProviders.map((p) => p.name).join(', ')}). Revisa Vercel logs.`,
         diagnostics,
-        tip: 'Crea API keys gratis en: Groq → console.groq.com, OpenRouter → openrouter.ai/keys, Gemini → aistudio.google.com/apikey',
+        tip: 'API keys gratis: Groq → console.groq.com | OpenRouter → openrouter.ai/keys | 9Router → npm i -g 9router + cloudflared tunnel --url http://localhost:20128',
       },
       { status: 502 },
     );
