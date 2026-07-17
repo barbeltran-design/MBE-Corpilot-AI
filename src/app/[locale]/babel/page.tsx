@@ -244,7 +244,7 @@ export default function BabelPage() {
       await approveBabelPhase(uid, currentPhase, lastMessage.content, locale);
       const refreshed = await getOrCreateBabelSession(uid, locale);
 
-      if (refreshed.currentPhase >= BABEL_IMPLEMENTED_PHASES) {
+      if ((refreshed.currentPhase ?? 0) >= BABEL_IMPLEMENTED_PHASES) {
         // Se acaba de aprobar la última fase (Fase 5). No hay una fase
         // siguiente que pedirle a Gemini: allPhasesDone pasa a true y el
         // textarea se vuelve a habilitar solo, listo para "/compilar".
