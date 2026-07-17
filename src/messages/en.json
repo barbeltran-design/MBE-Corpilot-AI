@@ -130,6 +130,7 @@
     "compileHeader": "### Your Socio-Environmental Strategic Business Plan — Compiled",
     "compileEmpty": "You haven't approved any phase yet, so there's nothing to compile. Approve at least Phase 0 and try again.",
     "compileHint": "Type /compilar at any time to assemble every phase you've approved so far into a single document.",
-    "errorGeneric": "Something went wrong talking to Babel. Please try again."
+        "downloadDeliverable": "Download PDF", 
+        "errorGeneric": "Something went wrong talking to Babel. Please try again."
   }
 }
