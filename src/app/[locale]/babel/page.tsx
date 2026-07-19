@@ -383,7 +383,7 @@ export default function BabelPage() {
       const refreshedCatch = await getOrCreateBabelSession(uid, locale);
       setError(err instanceof Error ? err.message : 'Error generico');
       setShowManualEditor(true);
-      setManualContent(phaseTemplate(refreshedCatch.currentPhase));
+      setManualContent(phaseTemplate(refreshedCatch.currentPhase ?? 0));
       setSession(refreshedCatch);
     } finally {
       setSending(false);
