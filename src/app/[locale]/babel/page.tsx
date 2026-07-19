@@ -387,9 +387,9 @@ export default function BabelPage() {
       const finalMessages = [...refreshed.messages, assistantMsg];
       setSession(function (prev) { return prev ? { ...prev, messages: finalMessages } : { ...refreshed, messages: finalMessages }; });
       await saveBabelMessages(uid, finalMessages);
+      if ((refreshed.currentPhase ?? 0) >= BABEL_IMPLEMENTED_PHASES) {
       await upsertCompiledPlan(finalMessages, refreshed.phases);
-    } catch (err) {
-      const refreshedCatch = await getOrCreateBabelSession(uid, locale);
+      }
       setError(err instanceof Error ? err.message : 'Error generico');
       setShowManualEditor(true);
       setManualContent(phaseTemplate(refreshedCatch.currentPhase ?? 0));
@@ -452,6 +452,7 @@ export default function BabelPage() {
       setSession(function (prev) { return prev ? { ...prev, messages: finalMessages } : { ...refreshed, messages: finalMessages }; });
       await saveBabelMessages(uid, finalMessages);
       setManualContent('');
+      if (isLastPhase) {
       await upsertCompiledPlan(finalMessages, refreshed.phases);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al guardar');
