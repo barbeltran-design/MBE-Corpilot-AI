@@ -390,6 +390,8 @@ export default function BabelPage() {
       if ((refreshed.currentPhase ?? 0) >= BABEL_IMPLEMENTED_PHASES) {
       await upsertCompiledPlan(finalMessages, refreshed.phases);
       }
+      } catch (err) {
+      const refreshedCatch = await getOrCreateBabelSession(uid, locale);
       setError(err instanceof Error ? err.message : 'Error generico');
       setShowManualEditor(true);
       setManualContent(phaseTemplate(refreshedCatch.currentPhase ?? 0));
@@ -454,8 +456,8 @@ export default function BabelPage() {
       setManualContent('');
       if (isLastPhase) {
       await upsertCompiledPlan(finalMessages, refreshed.phases);
-    } 
-      catch (err) {
+      }
+    } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al guardar');
     } finally {
       setSending(false);
