@@ -441,9 +441,18 @@ export default function BabelPage() {
     try {
       await approveBabelPhase(uid, phase, text, locale);
       const refreshed = await getOrCreateBabelSession(uid, locale);
+      const isLastPhase = phase >= BABEL_IMPLEMENTED_PHASES - 1;
+      const nextPhaseContent = text + (isLastPhase ? '' : '\n\n' + babelApprovalMarker(locale));
+      const assistantMsg: ChatMessage = {
+        role: 'assistant',
+        content: nextPhaseContent,
+        timestamp: Timestamp.now(),
+      };
+      const finalMessages = [...refreshed.messages, assistantMsg];
+      setSession(function (prev) { return prev ? { ...prev, messages: finalMessages } : { ...refreshed, messages: finalMessages }; });
+      await saveBabelMessages(uid, finalMessages);
       setManualContent('');
-      setSession(refreshed);
-      await upsertCompiledPlan(refreshed.messages, refreshed.phases);
+      await upsertCompiledPlan(finalMessages, refreshed.phases);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al guardar');
     } finally {
