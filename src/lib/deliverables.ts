@@ -17,6 +17,15 @@ import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { getFirebaseDb, getFirebaseStorage } from '@/lib/firebase';
 import type { AgentId, ChatDeliverableRef, DeliverableDoc } from '@/types/firestore';
 
+function blobToDataUri(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
 /**
  * Convierte texto con markdown ligero (líneas que empiezan con "#" se tratan
  * como encabezado en negrita) en un PDF multi-página con word-wrap. No es un
@@ -86,25 +95,31 @@ export async function createCompiledPlanDeliverable(params: {
     language === 'en' ? 'strategic-business-plan.pdf' : 'plan-estrategico-socioambiental.pdf';
 
   const blob = renderTextToPdf(title, compiledText);
-  const storagePath = deliverableStoragePath(uid, deliverableId, 'pdf');
-  const storageRef = ref(storage, storagePath);
-  await uploadBytes(storageRef, blob, { contentType: 'application/pdf' });
-  const url = await getDownloadURL(storageRef);
-
   const now = Timestamp.now();
-  const deliverableDoc: DeliverableDoc = {
-    uid,
-    deliverableId,
-    name: fileName,
-    type: 'pdf',
-    category: 'business-plan',
-    storageUrl: url,
-    generatedAt: now,
-    agentId,
-    sessionTopic,
-    phdReferences: [],
-  };
-  await setDoc(doc(db, 'deliverables', deliverableId), deliverableDoc);
+  let url: string;
+
+  try {
+    const storagePath = deliverableStoragePath(uid, deliverableId, 'pdf');
+    const storageRef = ref(storage, storagePath);
+    await uploadBytes(storageRef, blob, { contentType: 'application/pdf' });
+    url = await getDownloadURL(storageRef);
+    const deliverableDoc: DeliverableDoc = {
+      uid,
+      deliverableId,
+      name: fileName,
+      type: 'pdf',
+      category: 'business-plan',
+      storageUrl: url,
+      generatedAt: now,
+      agentId,
+      sessionTopic,
+      phdReferences: [],
+    };
+    await setDoc(doc(db, 'deliverables', deliverableId), deliverableDoc);
+  } catch (uploadErr) {
+    console.warn('[deliverables] Firebase Storage no disponible, usando data URI:', String(uploadErr).slice(0, 100));
+    url = await blobToDataUri(blob);
+  }
 
   return { name: fileName, type: 'pdf', url, generatedAt: now };
 }

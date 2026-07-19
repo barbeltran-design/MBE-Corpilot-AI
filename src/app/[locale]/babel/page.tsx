@@ -316,8 +316,11 @@ export default function BabelPage() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
           });
-          const data = await res.json();
-          if (!res.ok || data.error) throw new Error(data.error || 'Error generico');
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        console.error('[babel] API error response completa:', JSON.stringify(data, null, 2));
+        throw new Error(data.error || 'Error generico');
+      }
           retryRef.current = null;
           const assistantMsg: ChatMessage = {
             role: 'assistant',
@@ -371,7 +374,10 @@ export default function BabelPage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || 'Error generico');
+      if (!res.ok || data.error) {
+        console.error('[babel] API error response completa:', JSON.stringify(data, null, 2));
+        throw new Error(data.error || 'Error generico');
+      }
 
       const assistantMsg: ChatMessage = {
         role: 'assistant',
