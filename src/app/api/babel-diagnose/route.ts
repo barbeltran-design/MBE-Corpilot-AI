@@ -85,7 +85,7 @@ export async function GET() {
       TERTIARY_API_KEY: process.env.TERTIARY_API_KEY ? '✓ configurada' : '✗ faltante',
       GEMINI_API_KEY: process.env.GEMINI_API_KEY ? '✓ configurada' : '✗ faltante',
       ROUTER_ENDPOINT: process.env.ROUTER_ENDPOINT ? '✓ configurado' : '✗ faltante',
-      TERTIARY_MODEL: process.env.TERTIARY_MODEL || '(usando default: auto)',
+      TERTIARY_MODEL: process.env.TERTIARY_MODEL || '(usando default: gpt-4o-mini)',
       GEMINI_MODEL: process.env.GEMINI_MODEL || '(usando default: gemini-2.5-flash)',
     },
   });

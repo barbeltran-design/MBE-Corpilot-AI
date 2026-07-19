@@ -31,7 +31,7 @@ const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models
 const FALLBACK_ENDPOINT = process.env.FALLBACK_ENDPOINT || 'https://api.groq.com/openai/v1/chat/completions';
 const FALLBACK_MODEL = process.env.FALLBACK_MODEL || 'llama3-70b-8192';
 const TERTIARY_ENDPOINT = process.env.TERTIARY_ENDPOINT || 'https://openrouter.ai/api/v1/chat/completions';
-const TERTIARY_MODEL = process.env.TERTIARY_MODEL || 'auto';
+const TERTIARY_MODEL = process.env.TERTIARY_MODEL || 'gpt-4o-mini';
 // 9Router — proxy local con 40+ providers gratuitos.
 // Configura ROUTER_ENDPOINT con la URL pública de tu 9Router (túnel o VPS).
 // Ejemplo: https://tu-tunel.cloudflare.dev/v1
@@ -534,7 +534,7 @@ async function tryOpenAICompatible(
   const systemMsg = { role: 'system', content: buildSystemPrompt(language, phase) };
   const chatMessages = messages.map((m) => ({
     role: m.role === 'assistant' ? 'assistant' : 'user',
-    content: m.content,
+    content: [{ type: 'text', text: m.content }],
   }));
 
   try {
