@@ -33,7 +33,7 @@ const PHASE_0_QUESTIONS = {
     { key: 'utilidad_deseada', question: '### 7. Utilidad mensual deseada\n\nCuanto dinero neto quisieras que sobrara de ganancias mensualmente para vivir? (en tu moneda local)' },
     { key: 'sueldo_founder', question: '### 8. Sueldo del fundador\n\nSi vas a operar el negocio, que sueldo te asignarias para cubrir hasta 3 roles, que seria el mismo que le pagarias a otra persona por hacer cada rol? (Administracion, Comercial, Operacion)' },
     { key: 'gastos_fijos', question: '### 9. Gastos fijos\n\nQue gastos fijos tienes que pagar aunque no vendas (renta, servicios, software)?' },
-    { key: 'gastos_variables', question: '### 10. Gastos variables\n\nQue gastos variables tienes que pagar relacionados a entregar tu producto o servicio (materia prima, comisiones)?' }
+    { key: 'gastos_variables', question: '### 10. Gastos variables\n\nQue % de tus ingresos pagas de gastos variables paraa entregar tu producto o servicio (materia prima, comisiones, impuestos)?' }
   ],
   en: [
     { key: 'giro', question: '### 1. Business Type and Niche\n\nWhat exactly do you sell and who is it for?' },
@@ -45,7 +45,7 @@ const PHASE_0_QUESTIONS = {
     { key: 'utilidad_deseada', question: '### 7. Desired Monthly Profit\n\nHow much net profit would you like to have left over each month to live on? (in your local currency)' },
     { key: 'sueldo_founder', question: '### 8. Founder Salary\n\nIf you are going to run the business, what salary would you assign yourself to cover up to 3 roles, which would be the same as what you would pay another person to perform each role? (Administration, Commercial, Operations)' },
     { key: 'gastos_fijos', question: '### 9. Fixed Costs\n\nWhat fixed costs (rent, services, software) do you pay even if you dont sale anything?' },
-    { key: 'gastos_variables', question: '### 10. Variable Costs\n\nWhat variable costs (raw materials, commissions) do you identify to deliver your product or service?' }
+    { key: 'gastos_variables', question: '### 10. Variable Costs\n\nWhat percentage of your revenue goes toward variable costs (raw materials, commissions, taxes) to deliver your product or service?' }
   ]
 };
 
