@@ -119,11 +119,20 @@ export default function BabelPage() {
     lastMessage.role === 'assistant' &&
     lastMessage.content.includes(babelApprovalMarker(locale));
 
-  function friendlyError(raw: string): string {
-    if (raw.includes('image.png')) {
-      return 'El proveedor de IA actual no soporta imagenes. El error se resolvira al cambiar automaticamente al siguiente proveedor disponible.';
-    }
-    return raw;
+  const phaseTemplate = function (phase: number): string {
+    if (phase <= 0) return '';
+    const templates: Record<number, string> = {
+      1: '### 1. Propuesta de Valor\n\n**Trabajos funcionales:** \n\n**Trabajos emocionales:** \n\n**Trabajos sociales:** \n\n---\n\n### 2. Modelo de Negocio\n\n**Segmento de clientes:** \n\n**Propuesta de valor:** \n\n**Canales:** \n\n**Fuentes de ingreso:** \n\n---\n\n### 3. Proposito (Golden Circle)\n\n**Why (Proposito):** \n\n**How (Diferenciacion):** \n\n**What (Que vendes):** \n\n---\n\n### 4. Segmentacion\n\n**Arquetipo 1:** \n\n**Oceano Azul:** \n\n**Impacto social:** \n\n---\n\n### 5. ODS y Fondos\n\n**ODS vinculados:** \n\n**Fondos sugeridos:**',
+      2: '### 1. Analisis PESTEL\n\n**Politico:** \n\n**Economico:** \n\n**Social:** \n\n**Tecnologico:** \n\n**Ecologico:** \n\n**Legal:** \n\n---\n\n### 2. Fuerzas del Mercado\n\n**Competidores directos:** \n\n**Competidores indirectos:** \n\n**Nuevos entrantes:** \n\n---\n\n### 3. Tendencias Sectoriales\n\n\n---\n\n### 4. Prospectiva a 5 Anos\n\n**Escenario optimista:** \n\n**Escenario conservador:**',
+      3: '### 1. Capacidades Clave\n\n**Capacidades basicas:** \n\n**Capacidades diferenciadoras:** \n\n---\n\n### 2. Plan Operativo\n\n**Infraestructura:** \n\n**Cadena de suministro:** \n\n**Personal requerido:** \n\n---\n\n### 3. Estrategia Comercial\n\n**Marketing mix:** \n\n**Embudo de ventas:** \n\n**Customer Journey:**',
+      4: '### 1. Costos de Arranque y OpEx\n\n**Costos de arranque:** \n\n**Gastos operativos mensuales:** \n\n---\n\n### 2. Estrategia de Precios\n\n\n---\n\n### 3. Flujo de Caja Ano 1\n\n**Mes 1:** \n\n**Mes 2-12:** \n\n---\n\n### 4. Estado de Resultados\n\n**Ano 1:** \n\n**Ano 3:** \n\n**Ano 5:**',
+      5: '### 1. Balanced Scorecard + OKRs\n\n**Finanzas:** \n\n**Clientes:** \n\n**Procesos:** \n\n**Aprendizaje:** \n\n---\n\n### 2. Matriz de Impacto\n\n**Colaboradores:** \n\n**Sociedad:** \n\n**Medio ambiente:** \n\n---\n\n### 3. FODA Cruzado\n\n**Fortalezas:** \n\n**Oportunidades:** \n\n**Debilidades:** \n\n**Amenazas:** \n\n---\n\n### 4. Marco Agil\n\n\n---\n\n### 5. Elevator Pitch\n\n',
+    };
+    return templates[phase] ?? '### Escribe aqui tu analisis para esta fase...';
+  };
+
+  function friendlyError(): string {
+    return 'La inteligencia artificial no esta disponible en este momento. Escribe tu propia conclusion en el recuadro debajo y presiona "Guardar y aprobar" para continuar.';
   }
 
   // Si la sesion ya tiene fases aprobadas desde Firestore, salir del wizard
@@ -371,10 +380,11 @@ export default function BabelPage() {
       await saveBabelMessages(uid, finalMessages);
       await upsertCompiledPlan(finalMessages, refreshed.phases);
     } catch (err) {
+      const refreshedCatch = await getOrCreateBabelSession(uid, locale);
       setError(err instanceof Error ? err.message : 'Error generico');
       setShowManualEditor(true);
-      const refreshed = await getOrCreateBabelSession(uid, locale);
-      setSession(refreshed);
+      setManualContent(phaseTemplate(refreshedCatch.currentPhase));
+      setSession(refreshedCatch);
     } finally {
       setSending(false);
     }
