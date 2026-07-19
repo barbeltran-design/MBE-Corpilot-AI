@@ -131,7 +131,7 @@ export default function BabelPage() {
     return templates[phase] ?? '### Escribe aqui tu analisis para esta fase...';
   };
 
-  function friendlyError(): string {
+  function friendlyError(_raw: string): string {
     return 'La inteligencia artificial no esta disponible en este momento. Escribe tu propia conclusion en el recuadro debajo y presiona "Guardar y aprobar" para continuar.';
   }
 
