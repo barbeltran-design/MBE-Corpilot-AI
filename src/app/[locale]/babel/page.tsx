@@ -454,7 +454,8 @@ export default function BabelPage() {
       setManualContent('');
       if (isLastPhase) {
       await upsertCompiledPlan(finalMessages, refreshed.phases);
-    } catch (err) {
+    } 
+      catch (err) {
       setError(err instanceof Error ? err.message : 'Error al guardar');
     } finally {
       setSending(false);
