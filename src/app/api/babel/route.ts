@@ -26,7 +26,7 @@ import { NextRequest, NextResponse } from 'next/server';
 //   API key: aistudio.google.com/apikey | Modelo: gemini-2.5-flash
 // Nivel 4 — 9Router (router local, requiere túnel o VPS):
 //   npm install -g 9router && 9router | Endpoint: http://localhost:20128/v1
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 const FALLBACK_ENDPOINT = process.env.FALLBACK_ENDPOINT || 'https://api.groq.com/openai/v1/chat/completions';
 const FALLBACK_MODEL = process.env.FALLBACK_MODEL || 'llama-3.1-8b-instant';
