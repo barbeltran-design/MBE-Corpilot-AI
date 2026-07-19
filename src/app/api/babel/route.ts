@@ -537,25 +537,23 @@ async function tryOpenAICompatible(
     content: m.content,
   }));
 
-  try {
+  const tryFetch = async function (msgs: Record<string, unknown>[]): Promise<{ reply: string } | null> {
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         model,
-        messages: [systemMsg, ...chatMessages],
+        messages: msgs,
         temperature: 0.7,
-        max_tokens: 8192,
+        max_tokens: 4096,
       }),
     });
- 
     if (!res.ok) {
       const errText = (await res.text()).slice(0, 300);
       console.error(`[babel] ${label} error ${res.status}:`, errText);
       diagnostics.push({ provider: label, status: res.status, error: errText });
       return null;
     }
-
     const data = await res.json();
     const text = data?.choices?.[0]?.message?.content ?? '';
     if (!text) {
@@ -564,6 +562,24 @@ async function tryOpenAICompatible(
       return null;
     }
     return { reply: text };
+  };
+
+  try {
+    // Intento 1: con system prompt completo
+    let result = await tryFetch([systemMsg, ...chatMessages]);
+    if (result) return result;
+
+    // Intento 2: reintentar con solo los mensajes de chat (sin system prompt)
+    if (diagnostics.length > 0 && diagnostics[diagnostics.length - 1]?.status === 400) {
+      console.error(`[babel] ${label} falló con 400, reintentando sin system prompt...`);
+      const prevDiagLen = diagnostics.length;
+      result = await tryFetch(chatMessages);
+      if (result) {
+        diagnostics.splice(prevDiagLen - 1, diagnostics.length - prevDiagLen + 1);
+        return result;
+      }
+    }
+    return null;
   } catch (fetchErr) {
     console.error(`[babel] ${label} fetch exception:`, fetchErr);
     diagnostics.push({ provider: label, status: 0, error: String(fetchErr) });
