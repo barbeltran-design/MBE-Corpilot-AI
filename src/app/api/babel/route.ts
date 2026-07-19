@@ -29,7 +29,7 @@ import { NextRequest, NextResponse } from 'next/server';
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 const FALLBACK_ENDPOINT = process.env.FALLBACK_ENDPOINT || 'https://api.groq.com/openai/v1/chat/completions';
-const FALLBACK_MODEL = process.env.FALLBACK_MODEL || 'llama3-70b-8192';
+const FALLBACK_MODEL = process.env.FALLBACK_MODEL || 'llama-3.1-8b-instant';
 const TERTIARY_ENDPOINT = process.env.TERTIARY_ENDPOINT || 'https://openrouter.ai/api/v1/chat/completions';
 const TERTIARY_MODEL = process.env.TERTIARY_MODEL || 'gpt-4o-mini';
 // 9Router — proxy local con 40+ providers gratuitos.
@@ -534,7 +534,7 @@ async function tryOpenAICompatible(
   const systemMsg = { role: 'system', content: buildSystemPrompt(language, phase) };
   const chatMessages = messages.map((m) => ({
     role: m.role === 'assistant' ? 'assistant' : 'user',
-    content: [{ type: 'text', text: m.content }],
+    content: m.content,
   }));
 
   try {
@@ -619,6 +619,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // DEBUG: registrar el primer mensaje para identificar problemas de formato
+    const debugInfo = {
+      totalMessages: compactMessages.length,
+      firstRole: compactMessages[0]?.role,
+      firstContentPreview: (compactMessages[0]?.content ?? '').slice(0, 100),
+      lastRole: compactMessages[compactMessages.length - 1]?.role,
+      lastContentPreview: (compactMessages[compactMessages.length - 1]?.content ?? '').slice(0, 100),
+      phase: currentPhase,
+      phase0Complete: !!phase0Complete,
+    };
+
     // 1. Groq (más fiable, gratis, 30 req/min)
     const resultGroq = await tryOpenAICompatible(
       compactMessages, lang, currentPhase,
@@ -674,12 +685,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const mainError = diagnostics.map(d => `${d.provider} (${d.status}): ${d.error.slice(0, 100)}`).join(' | ');
+    const mainError = diagnostics.map(d => `${d.provider} (${d.status}): ${d.error.slice(0, 300)}`).join(' | ');
     return NextResponse.json(
       {
         error: mainError,
-        diagnostics,
-        tip: 'API keys gratis: Groq → console.groq.com | OpenRouter → openrouter.ai/keys | 9Router → npm i -g 9router + cloudflared tunnel --url http://localhost:20128',
+        debug: debugInfo,
+        providers: diagnostics.map(d => ({ provider: d.provider, status: d.status, error: d.error.slice(0, 500) })),
+        tip: 'API keys gratis: Groq (console.groq.com) | OpenRouter (openrouter.ai/keys) | Gemini (aistudio.google.com/apikey)',
       },
       { status: 502 },
     );

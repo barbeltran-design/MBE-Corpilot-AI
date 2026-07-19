@@ -131,8 +131,11 @@ export default function BabelPage() {
     return templates[phase] ?? '### Escribe aqui tu analisis para esta fase...';
   };
 
-  function friendlyError(_raw: string): string {
-    return 'La inteligencia artificial no esta disponible en este momento. Escribe tu propia conclusion en el recuadro debajo y presiona "Guardar y aprobar" para continuar.';
+  function friendlyError(raw: string): string {
+    if (raw.includes('image.png')) {
+      return 'Error de formato al contactar la IA. Revisa que las API keys en Vercel sean validas (Groq, OpenRouter, Gemini). Detalle: ' + raw.slice(0, 300);
+    }
+    return raw;
   }
 
   // Si la sesion ya tiene fases aprobadas desde Firestore, salir del wizard
