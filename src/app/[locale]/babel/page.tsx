@@ -1,5 +1,4 @@
 'use client';
-
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
@@ -15,12 +14,10 @@ import {
   updateBabelPhaseSummary,
 } from '@/lib/babel-session';
 import { BABEL_IMPLEMENTED_PHASES, babelApprovalMarker } from '@/lib/babel-constants';
-import { downloadCompiledPlanPdf } from '@/lib/deliverables';
+import { downloadCompiledPlanPdf, downloadFinancialGoalsExcel } from '@/lib/deliverables';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-
 import type { BabelPhaseRecord, ChatMessage, SessionDoc } from '@/types/firestore';
-
 // Preguntas de la Fase 0 (una por una)
 const PHASE_0_QUESTIONS = {
   es: [
@@ -49,11 +46,91 @@ const PHASE_0_QUESTIONS = {
   ]
 };
 
+// Preguntas del mini-asistente de Objetivos Financieros (Fase 4.5), disponible
+// una vez que las 6 fases de Babel estan aprobadas. Es independiente del chat
+// principal: solo vive en el estado local de esta pantalla y termina
+// descargando un Excel.
+const FIN_QUESTIONS = {
+  es: [
+    {
+      key: 'canales',
+      question:
+        '### Paso 1 de 4: Ingresos\n\nEscribe tus lineas o canales de ingreso y su meta de ventas mensual, uno por linea, con el formato:\n\nNombre: Monto\n\nEjemplo:\nRestaurante: 85000\nFood Truck: 10000\nEventos: 40000',
+    },
+    {
+      key: 'costosVariables',
+      question:
+        '### Paso 2 de 4: Costos variables\n\nQue % de tus ventas se va en costos variables (materia prima, comisiones, impuestos) para poder entregar tu producto o servicio? (ejemplo: 55)',
+    },
+    {
+      key: 'costosFijos',
+      question:
+        '### Paso 3 de 4: Costos fijos\n\nEnumera tus costos fijos mensuales, uno por linea, con el formato:\n\nNombre: Monto\n\nEjemplo:\nRenta: 11000\nInternet: 850\nNomina: 8000',
+    },
+    {
+      key: 'publicidad',
+      question: '### Paso 4 de 4: Publicidad\n\nCuanto puedes invertir en publicidad al mes? (en tu moneda local)',
+    },
+  ],
+  en: [
+    {
+      key: 'canales',
+      question:
+        '### Step 1 of 4: Revenue\n\nWrite your revenue channels and their monthly sales target, one per line, using the format:\n\nName: Amount\n\nExample:\nRestaurant: 85000\nFood Truck: 10000\nEvents: 40000',
+    },
+    {
+      key: 'costosVariables',
+      question:
+        '### Step 2 of 4: Variable costs\n\nWhat % of your sales goes to variable costs (raw materials, commissions, taxes) to deliver your product or service? (example: 55)',
+    },
+    {
+      key: 'costosFijos',
+      question:
+        '### Step 3 of 4: Fixed costs\n\nList your monthly fixed costs, one per line, using the format:\n\nName: Amount\n\nExample:\nRent: 11000\nInternet: 850\nPayroll: 8000',
+    },
+    {
+      key: 'publicidad',
+      question: '### Step 4 of 4: Advertising\n\nHow much can you invest in advertising per month? (in your local currency)',
+    },
+  ],
+};
+
+function parseNumberLoose(text: string): number {
+  const cleaned = text.replace(/[^0-9.\-]/g, '');
+  const n = parseFloat(cleaned);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function parsePercentLoose(text: string): number {
+  const n = parseNumberLoose(text);
+  return n > 1 ? n / 100 : n;
+}
+
+function parseNamedAmountLines(text: string): { name: string; amount: number }[] {
+  const lines = text
+    .split('\n')
+    .map(function (l) { return l.trim(); })
+    .filter(function (l) { return l.length > 0; });
+  const items: { name: string; amount: number }[] = [];
+  for (const line of lines) {
+    const sepIndex = line.indexOf(':') >= 0 ? line.indexOf(':') : line.lastIndexOf('-');
+    if (sepIndex > 0) {
+      const name = line.slice(0, sepIndex).trim();
+      const amountRaw = line.slice(sepIndex + 1).trim();
+      const amount = parseNumberLoose(amountRaw);
+      if (name) items.push({ name: name, amount: amount });
+    } else {
+      const amount = parseNumberLoose(line);
+      if (amount > 0) items.push({ name: line, amount: amount });
+    }
+  }
+  return items;
+}
+
 export default function BabelPage() {
   const locale = useLocale() as 'es' | 'en';
   const t = useTranslations('babel');
   const router = useRouter();
-
   const [uid, setUid] = React.useState<string | null>(null);
   const [session, setSession] = React.useState<SessionDoc | null>(null);
   const [input, setInput] = React.useState('');
@@ -62,20 +139,33 @@ export default function BabelPage() {
   const retryRef = React.useRef<(() => Promise<void>) | null>(null);
   const [editingMessageIndex, setEditingMessageIndex] = React.useState<number | null>(null);
   const [editContent, setEditContent] = React.useState('');
-
   const [chatExpanded, setChatExpanded] = React.useState<Set<number>>(new Set());
   const [compiling, setCompiling] = React.useState(false);
   const [showManualEditor, setShowManualEditor] = React.useState(false);
   const [manualContent, setManualContent] = React.useState('');
-
   // Estado para el flujo de preguntas una por una
   const [currentQuestionIndex, setCurrentQuestionIndex] = React.useState(0);
   const [phase0Answers, setPhase0Answers] = React.useState<Record<string, string>>({});
   const [isPhase0Complete, setIsPhase0Complete] = React.useState(false);
 
+  // Estado del mini-asistente de Objetivos Financieros (Fase 4.5)
+  const [finActive, setFinActive] = React.useState(false);
+  const [finStep, setFinStep] = React.useState(0);
+  const [finInput, setFinInput] = React.useState('');
+  const [finAnswers, setFinAnswers] = React.useState<Record<string, string>>({});
+  const [finSending, setFinSending] = React.useState(false);
+  const [finError, setFinError] = React.useState<string | null>(null);
+  const [finResult, setFinResult] = React.useState<{
+    breakEven: number;
+    breakEvenPct: number;
+    growthRate: number;
+    profit: number;
+    pctProfit: number;
+  } | null>(null);
+
   const bottomRef = React.useRef<HTMLDivElement>(null);
   const questions = PHASE_0_QUESTIONS[locale];
-
+  const finQuestions = FIN_QUESTIONS[locale];
   // 1. Autenticacion y carga de sesion
   React.useEffect(() => {
     const auth = getFirebaseAuth();
@@ -90,12 +180,10 @@ export default function BabelPage() {
     });
     return unsubscribe;
   }, [locale, router]);
-
   // 2. Auto-scroll al fondo del chat
   React.useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [session?.messages.length]);
-
   // 3. Inyectar la primera pregunta automaticamente al iniciar
   React.useEffect(() => {
     if (!session || isPhase0Complete) return;
@@ -109,7 +197,6 @@ export default function BabelPage() {
       setSession(prev => prev ? { ...prev, messages: [questionMsg] } : prev);
     }
   }, [session, currentQuestionIndex, isPhase0Complete, questions]);
-
   const currentPhase = session?.currentPhase ?? 0;
   const allPhasesDone = currentPhase >= BABEL_IMPLEMENTED_PHASES;
   const lastMessage = session?.messages[session.messages.length - 1];
@@ -118,7 +205,6 @@ export default function BabelPage() {
     !!lastMessage &&
     lastMessage.role === 'assistant' &&
     lastMessage.content.includes(babelApprovalMarker(locale));
-
   const phaseTemplate = function (phase: number): string {
     if (phase <= 0) return '';
     const templates: Record<number, string> = {
@@ -130,21 +216,18 @@ export default function BabelPage() {
     };     
     return templates[phase] ?? '### Escribe aqui tu analisis para esta fase...';
   };
-
   function friendlyError(raw: string): string {
     if (raw.includes('image.png')) {
       return 'Error de formato al contactar la IA. Revisa que las API keys en Vercel sean validas (Groq, OpenRouter, Gemini). Detalle: ' + raw.slice(0, 300);
     }
     return raw;
   }
-
   // Si la sesion ya tiene fases aprobadas desde Firestore, salir del wizard
   React.useEffect(() => {
     if (session && (session.currentPhase ?? 0) > 0) {
       setIsPhase0Complete(true);
     }
   }, [session]);
-
   // 4. Manejar respuesta en Fase 0 (Pregunta por pregunta)
   async function handlePhase0Answer() {
     if (!input.trim() || !uid || !session) return;
@@ -152,28 +235,23 @@ export default function BabelPage() {
     setInput('');
     setSending(true);
     setError(null);
-
     const userMsg: ChatMessage = {
       role: 'user',
       content: answer,
       timestamp: Timestamp.now(),
     };
-
     try {
       const updatedAnswers = { ...phase0Answers, [questions[currentQuestionIndex].key]: answer };
       setPhase0Answers(updatedAnswers);
-
       if (currentQuestionIndex === questions.length - 1) {
         // ULTIMA PREGUNTA: generar conclusion local (sin API)
         const phase0Labels: Record<string, string> = locale === 'en'
           ? { giro: 'Business Type', ubicacion: 'Location', madurez: 'Maturity', recursos: 'Resources', ambicion: 'Ambition', mision_vision: 'Mission & Vision', utilidad_deseada: 'Desired Monthly Profit', sueldo_founder: 'Founder Salary', gastos_fijos: 'Fixed Costs', gastos_variables: 'Variable Costs' }
           : { giro: 'Giro y nicho', ubicacion: 'Ubicación', madurez: 'Madurez', recursos: 'Recursos', ambicion: 'Ambición', mision_vision: 'Misión y Visión', utilidad_deseada: 'Utilidad mensual deseada', sueldo_founder: 'Sueldo del fundador', gastos_fijos: 'Gastos fijos', gastos_variables: 'Gastos variables' };
-
         const conclusionLines = Object.entries(updatedAnswers).map(function (entry) {
           return '**' + (phase0Labels[entry[0]] ?? entry[0]) + ':** ' + entry[1];
         });
         const conclusionBody = '### Resumen de Fase 0 — Calibración Inicial\n\n' + conclusionLines.join('\n\n---\n\n') + '\n\n---\n\n*¿Apruebas este resumen de la Fase 0 para continuar a la Fase 1?*';
-
         const summaryMsg: ChatMessage = {
           role: 'user',
           content: 'Fase 0 completada:\n\n' + conclusionLines.join('\n\n'),
@@ -184,7 +262,6 @@ export default function BabelPage() {
           content: conclusionBody,
           timestamp: Timestamp.now(),
         };
-
         const cleanMessages: ChatMessage[] = [summaryMsg, assistantMsg];
         setSession(function (prev) { return prev ? { ...prev, messages: cleanMessages } : prev; });
         await saveBabelMessages(uid, cleanMessages);
@@ -193,17 +270,14 @@ export default function BabelPage() {
         // PREGUNTAS INTERMEDIAS: solo estado local, NO a Firestore
         const updatedMessages = [...session.messages, userMsg];
         setSession(function (prev) { return prev ? { ...prev, messages: updatedMessages } : prev; });
-
         const nextIndex = currentQuestionIndex + 1;
         setCurrentQuestionIndex(nextIndex);
-
         const nextQuestion = questions[nextIndex];
         const nextQuestionMsg: ChatMessage = {
           role: 'assistant',
           content: nextQuestion.question,
           timestamp: Timestamp.now(),
         };
-
         const messagesWithNextQuestion = [...updatedMessages, nextQuestionMsg];
         setSession(function (prev) { return prev ? { ...prev, messages: messagesWithNextQuestion } : prev; });
       }
@@ -260,14 +334,12 @@ export default function BabelPage() {
       setSending(false);
     }
   }
-
   // 5. Manejar mensajes de chat normal (Fases 1-5)
   async function sendMessage(text: string) {
     if (!uid || !session || !text.trim()) return;
     setSending(true);
     setError(null);
     retryRef.current = null;
-
     const userMsg: ChatMessage = {
       role: 'user',
       content: text.trim(),
@@ -277,14 +349,12 @@ export default function BabelPage() {
     setSession({ ...session, messages: historyForApi });
     const sentText = text.trim();
     setInput('');
-
     // Guardar payload para reintentar
     const payload = {
       messages: historyForApi.map(function (m) { return { role: m.role, content: m.content }; }),
       language: locale,
       phase: currentPhase,
     };
-
     try {
       const res = await fetch('/api/babel', {
         method: 'POST',
@@ -293,9 +363,7 @@ export default function BabelPage() {
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Error generico');
-
       retryRef.current = null;
-
       const assistantMsg: ChatMessage = {
         role: 'assistant',
         content: data.reply as string,
@@ -340,7 +408,6 @@ export default function BabelPage() {
       setSending(false);
     }
   }
-
   async function handleApprove(editedText?: string) {
     if (!uid || !session || !lastMessage) return;
     setSending(true);
@@ -350,7 +417,6 @@ export default function BabelPage() {
     try {
       await approveBabelPhase(uid, currentPhase, approvedContent, locale);
       const refreshed = await getOrCreateBabelSession(uid, locale);
-
       if ((refreshed.currentPhase ?? 0) >= BABEL_IMPLEMENTED_PHASES) {
         setSession(refreshed);
         setSending(false);
@@ -359,14 +425,12 @@ export default function BabelPage() {
         setCompiling(false);
         return;
       }
-
       const approvalMsg: ChatMessage = {
         role: 'user',
         content: locale === 'en' ? "I approve, let's continue." : 'Apruebo, continuemos.',
         timestamp: Timestamp.now(),
       };
       const historyForApi = [...refreshed.messages, approvalMsg];
-
       const res = await fetch('/api/babel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -381,7 +445,6 @@ export default function BabelPage() {
         console.error('[babel] API error response completa:', JSON.stringify(data, null, 2));
         throw new Error(data.error || 'Error generico');
       }
-
       const assistantMsg: ChatMessage = {
         role: 'assistant',
         content: data.reply as string,
@@ -403,17 +466,14 @@ export default function BabelPage() {
       setSending(false);
     }
   }
-
   function handleStartEdit(index: number, content: string) {
     setEditingMessageIndex(index);
     setEditContent(content);
   }
-
   function handleCancelEdit() {
     setEditingMessageIndex(null);
     setEditContent('');
   }
-
   async function handleSaveEdit() {
     if (!uid || !session || editingMessageIndex === null) return;
     setError(null);
@@ -437,7 +497,6 @@ export default function BabelPage() {
       setError(err instanceof Error ? err.message : 'Error al guardar');
     }
   }
-
   async function manualApprovePhase(phase: number, text: string) {
     if (!uid || !session) return;
     setSending(true);
@@ -466,15 +525,12 @@ export default function BabelPage() {
       setSending(false);
     }
   }
-
-
   async function upsertCompiledPlan(overrideMessages?: ChatMessage[], overridePhases?: BabelPhaseRecord[]) {
     if (!uid || !session) return;
     try {
       const phases = overridePhases ?? session.phases ?? [];
       const compiled = phases.length > 0 ? [...phases].sort((a, b) => a.phase - b.phase).map((p) => p.summary).join('\n\n---\n\n') : '';
       const compiledText = compiled ? '### Plan Estrategico Compilado\n\n' + compiled : 'No hay fases aprobadas para compilar aun.';
-
       const baseMessages = overrideMessages ?? session.messages;
       let existingIdx = -1;
       for (let j = baseMessages.length - 1; j >= 0; j--) {
@@ -483,7 +539,6 @@ export default function BabelPage() {
           break;
         }
       }
-
       if (compiled) {
         try {
           downloadCompiledPlanPdf({ sessionTopic: session.topic, compiledText: compiled, language: locale });
@@ -491,7 +546,6 @@ export default function BabelPage() {
           console.error('[babel] No se pudo generar el PDF del plan compilado', pdfErr);
         }
       }
-
       let finalMessages: ChatMessage[];
       if (existingIdx >= 0) {
         finalMessages = baseMessages.map(function (m, i) {
@@ -501,7 +555,6 @@ export default function BabelPage() {
         const assistantMsg: ChatMessage = { role: 'assistant', content: compiledText, timestamp: Timestamp.now() };
         finalMessages = [...baseMessages, assistantMsg];
       }
-
       setSession(function (prev) { return prev ? { ...prev, messages: finalMessages } : prev; });
       setInput('');
     } catch (err) {
@@ -509,7 +562,6 @@ export default function BabelPage() {
       throw err;
     }
   }
-
   async function handleCompile() {
     if (!uid || !session || compiling) return;
     setCompiling(true);
@@ -523,12 +575,91 @@ export default function BabelPage() {
     }
   }
 
+  function handleStartFinancialGoals() {
+    setFinActive(true);
+    setFinStep(0);
+    setFinAnswers({});
+    setFinInput('');
+    setFinResult(null);
+    setFinError(null);
+  }
+
+  function handleCloseFinancialGoals() {
+    setFinActive(false);
+    setFinStep(0);
+    setFinAnswers({});
+    setFinInput('');
+    setFinResult(null);
+    setFinError(null);
+  }
+
+  async function handleFinAnswer() {
+    if (!finInput.trim()) return;
+    const key = finQuestions[finStep].key;
+    const updated = { ...finAnswers, [key]: finInput.trim() };
+    setFinAnswers(updated);
+    setFinInput('');
+
+    if (finStep < finQuestions.length - 1) {
+      setFinStep(finStep + 1);
+      return;
+    }
+
+    setFinSending(true);
+    setFinError(null);
+    try {
+      let channels = parseNamedAmountLines(updated.canales || '');
+      if (channels.length === 0) {
+        const single = parseNumberLoose(updated.canales || '0');
+        channels = [{ name: locale === 'en' ? 'Revenue' : 'Ingresos', amount: single }];
+      }
+      const channelsForExcel = channels.map(function (c) { return { name: c.name, monthly: c.amount }; });
+
+      const fixedCosts = parseNamedAmountLines(updated.costosFijos || '');
+      const variableCostPct = parsePercentLoose(updated.costosVariables || '0');
+      const adSpend = parseNumberLoose(updated.publicidad || '0');
+
+      const totalRevenue = channelsForExcel.reduce(function (s, c) { return s + (c.monthly || 0); }, 0);
+      const fixedCostTotal = fixedCosts.reduce(function (s, c) { return s + (c.amount || 0); }, 0);
+      const variableCostAmount = totalRevenue * variableCostPct;
+      const totalCost = variableCostAmount + fixedCostTotal + adSpend;
+      const profit = totalRevenue - totalCost;
+      const pctProfit = totalRevenue > 0 ? profit / totalRevenue : 0;
+      const denom = 1 - variableCostPct;
+      const breakEven = denom > 0 ? (fixedCostTotal + adSpend) / denom : 0;
+      const breakEvenPct = totalRevenue > 0 ? breakEven / totalRevenue : 0;
+      const growthRate = (function () {
+        if (!totalRevenue || totalRevenue <= 0 || adSpend <= 0) return 0;
+        const pct = adSpend / totalRevenue;
+        if (pct <= 0.02) return 0.01;
+        if (pct <= 0.05) return 0.02;
+        if (pct <= 0.1) return 0.04;
+        if (pct <= 0.15) return 0.06;
+        return 0.08;
+      })();
+
+      downloadFinancialGoalsExcel({
+        language: locale,
+        channels: channelsForExcel,
+        variableCostPct: variableCostPct,
+        fixedCosts: fixedCosts,
+        adSpend: adSpend,
+      });
+
+      setFinResult({ breakEven: breakEven, breakEvenPct: breakEvenPct, growthRate: growthRate, profit: profit, pctProfit: pctProfit });
+      setFinStep(finQuestions.length);
+    } catch (err) {
+      setFinError(err instanceof Error ? err.message : 'Error al generar el archivo');
+    } finally {
+      setFinSending(false);
+    }
+  }
+
   async function handleLogout() {
     const auth = getFirebaseAuth();
     await signOut(auth);
     router.push('/' + locale);
   }
-
   async function handleReset() {
     if (!uid) return;
     const confirmMsg =
@@ -551,14 +682,11 @@ export default function BabelPage() {
       setSending(false);
     }
   }
-
   if (!session) {
     return <div className="flex min-h-screen items-center justify-center text-slate-500">{t('loading')}</div>;
   }
-
   // VISTA 1: WIZARD DE FASE 0 (Pregunta por pregunta)
   const isPhase0Active = currentPhase === 0 && currentQuestionIndex < questions.length && !isPhase0Complete;
-
   if (isPhase0Active) {
     return (
       <div className="mx-auto flex min-h-screen max-w-2xl flex-col gap-4 p-4 sm:p-6">
@@ -572,7 +700,6 @@ export default function BabelPage() {
            <Button onClick={handleLogout} variant="outline" size="sm">Cerrar sesion</Button>
           </div>
         </div>
-
         {/* Historial de respuestas previas */}
         {session.messages.length > 0 && (
           <Card className="flex-1 space-y-3 overflow-y-auto p-4 max-h-[40vh]">
@@ -613,13 +740,11 @@ export default function BabelPage() {
             })}
           </Card>
         )}
-
         {/* Barra de progreso */}
         <div className="w-full bg-slate-200 rounded-full h-2">
           <div className="bg-blue-600 h-2 rounded-full transition-all" style={{ width: String(((currentQuestionIndex + 1) / questions.length) * 100) + '%' }} />
         </div>
         <p className="text-sm text-slate-600">Pregunta {currentQuestionIndex + 1} de {questions.length}</p>
-
         {error && (
           <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600 border border-red-200">
             <div className="mb-1">{friendlyError(error)}</div>
@@ -644,7 +769,6 @@ export default function BabelPage() {
             </div>
           </div>
         )}
-
         {showManualEditor && (
           <Card className="p-4 space-y-2">
             <p className="text-sm font-medium text-slate-700">Escribe tu conclusion de la Fase 0 manualmente:</p>
@@ -665,13 +789,11 @@ export default function BabelPage() {
             </div>
           </Card>
         )}
-
         {/* Pregunta actual y formulario */}
         <Card className="p-6">
           <div className="whitespace-pre-wrap text-slate-900 mb-4 font-medium">
             {questions[currentQuestionIndex].question}
           </div>
-
           <form
             onSubmit={function (e) {
               e.preventDefault();
@@ -700,7 +822,6 @@ export default function BabelPage() {
       </div>
     );
   }
-
   // VISTA 2: CHAT NORMAL (Fases 1-5 y posterior a Fase 0)
   return (
     <div className="mx-auto flex min-h-screen max-w-4xl flex-col gap-4 p-4 sm:p-6">
@@ -714,7 +835,6 @@ export default function BabelPage() {
          <Button onClick={handleLogout} variant="outline" size="sm">Cerrar sesion</Button>
         </div>
       </div>
-
       <Card className="flex-1 space-y-3 overflow-y-auto p-4 min-h-[60vh]">
         {session.messages.map(function (m, i) {
           const isLong = m.content.length > 300;
@@ -786,7 +906,6 @@ export default function BabelPage() {
         )}
         <div ref={bottomRef} />
       </Card>
-
         {error && (
         <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600 border border-red-200">
           <div className="mb-1">{friendlyError(error)}</div>
@@ -811,7 +930,6 @@ export default function BabelPage() {
           </div>
         </div>
       )}
-
       {showManualEditor && !awaitingApproval && (
         <Card className="p-4 space-y-2">
           <p className="text-sm font-medium text-slate-700">Escribe tu conclusion para la Fase {currentPhase} manualmente:</p>
@@ -832,16 +950,13 @@ export default function BabelPage() {
           </div>
         </Card>
       )}
-
       {/* Panel de etapas aprobadas — toggle desde link en botones de aprobación */}
-
       <div className="flex flex-col gap-2">
         {awaitingApproval && editingMessageIndex === null && !showManualEditor && (
           <Button onClick={function () { handleApprove(); }} disabled={sending}>
             {allPhasesDone ? t('approveFinalButton') : t('approveButton', { phase: currentPhase })}
           </Button>
         )}
-
         {awaitingApproval && showManualEditor && (
           <Card className="p-4 space-y-2">
             <p className="text-sm font-medium text-slate-700">Escribe tu propia conclusion para la Fase {currentPhase}:</p>
@@ -862,7 +977,6 @@ export default function BabelPage() {
             </div>
           </Card>
         )}
-
         {awaitingApproval && editingMessageIndex !== null && (
           <div className="flex gap-2">
             <Button onClick={handleCancelEdit} disabled={sending} variant="outline" className="flex-1">
@@ -873,11 +987,82 @@ export default function BabelPage() {
             </Button>
           </div>
         )}
-
         {allPhasesDone && !awaitingApproval && (
           <Button onClick={handleCompile} disabled={compiling} variant="outline" className="w-full">
             {compiling ? 'Actualizando...' : 'Actualizar plan compilado'}
           </Button>
+        )}
+
+        {allPhasesDone && !awaitingApproval && !finActive && (
+          <Button onClick={handleStartFinancialGoals} variant="outline" className="w-full">
+            {locale === 'en' ? 'Define financial goals (break-even + projection)' : 'Definir objetivos financieros (punto de equilibrio + proyección)'}
+          </Button>
+        )}
+
+        {finActive && (
+          <Card className="p-4 space-y-3">
+            {finResult ? (
+              <div className="space-y-2 text-sm text-slate-800">
+                <p className="font-semibold">
+                  {locale === 'en' ? 'Your financial goals file was downloaded.' : 'Tu archivo de objetivos financieros se descargó.'}
+                </p>
+                <p>
+                  <strong>{locale === 'en' ? 'Break-even point' : 'Punto de equilibrio'}:</strong>{' '}
+                  {finResult.breakEven.toLocaleString(undefined, { maximumFractionDigits: 0 })}{' '}
+                  ({(finResult.breakEvenPct * 100).toFixed(1)}% {locale === 'en' ? 'of your sales target' : 'de tu meta de ventas'})
+                </p>
+                <p>
+                  <strong>{locale === 'en' ? 'Growth rate used' : 'Crecimiento mensual usado'}:</strong>{' '}
+                  {(finResult.growthRate * 100).toFixed(1)}%
+                </p>
+                <p>
+                  <strong>{locale === 'en' ? 'Estimated monthly profit' : 'Utilidad estimada mensual'}:</strong>{' '}
+                  {finResult.profit.toLocaleString(undefined, { maximumFractionDigits: 0 })}{' '}
+                  ({(finResult.pctProfit * 100).toFixed(1)}%)
+                </p>
+                <Button onClick={handleCloseFinancialGoals} variant="outline" size="sm">
+                  {locale === 'en' ? 'Close' : 'Cerrar'}
+                </Button>
+              </div>
+            ) : (
+              <>
+                <div className="w-full bg-slate-200 rounded-full h-2">
+                  <div className="bg-blue-600 h-2 rounded-full transition-all" style={{ width: String(((finStep + 1) / finQuestions.length) * 100) + '%' }} />
+                </div>
+                <div className="whitespace-pre-wrap text-slate-900 font-medium">
+                  {finQuestions[finStep].question}
+                </div>
+                {finError && (
+                  <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600 border border-red-200">
+                    {finError}
+                  </div>
+                )}
+                <form
+                  onSubmit={function (e) { e.preventDefault(); handleFinAnswer(); }}
+                  className="flex gap-2 items-end"
+                >
+                  <textarea
+                    value={finInput}
+                    onChange={function (e) { setFinInput(e.target.value); }}
+                    rows={4}
+                    placeholder={locale === 'en' ? 'Type your answer here...' : 'Escribe tu respuesta aquí...'}
+                    disabled={finSending}
+                    className="flex-1 resize-none rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 min-h-[80px]"
+                  />
+                  <Button type="submit" disabled={finSending || !finInput.trim()} className="mb-0 h-10">
+                    {finSending ? (locale === 'en' ? 'Generating...' : 'Generando...') : (locale === 'en' ? 'Next' : 'Siguiente')}
+                  </Button>
+                </form>
+                <button
+                  type="button"
+                  onClick={handleCloseFinancialGoals}
+                  className="text-xs font-medium text-slate-500 underline underline-offset-2 hover:text-slate-700"
+                >
+                  {locale === 'en' ? 'Cancel' : 'Cancelar'}
+                </button>
+              </>
+            )}
+          </Card>
         )}
 
         <form
