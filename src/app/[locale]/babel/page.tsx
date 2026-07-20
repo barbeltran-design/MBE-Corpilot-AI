@@ -24,16 +24,16 @@ import type { BabelPhaseRecord, ChatMessage, SessionDoc } from '@/types/firestor
 // Preguntas de la Fase 0 (una por una)
 const PHASE_0_QUESTIONS = {
   es: [
-    { key: 'giro', question: '### 1. Giro y nicho especifico\n\nQue vendes exactamente y a quien va dirigido?' },
-    { key: 'ubicacion', question: '### 2. Ubicacion operativa\n\nEn que ciudad, estado y pais opera el negocio?' },
-    { key: 'madurez', question: '### 3. Madurez actual\n\nEs una idea en papel, un producto o servicio ya validado, o un negocio en marcha buscando escalar?' },
-    { key: 'recursos', question: '### 4. Recursos disponibles\n\nCon que recursos materiales, humanos, intelectuales (marca, procesos, patentes) y financieros cuentas actualmente?' },
-    { key: 'ambicion', question: '### 5. Nivel de ambicion financiera\n\nBuscas crear un autoempleo sostenible o una estructura escalable para levantar capital de inversionistas?' },
-    { key: 'mision_vision', question: '### 6. Proposito Comun, Mision y vision\n\nYa las tienes definidas o prefieres que las disenemos desde cero?' },
-    { key: 'utilidad_deseada', question: '### 7. Utilidad mensual deseada\n\nCuanto dinero neto quisieras que sobrara de ganancias mensualmente para vivir? (en tu moneda local)' },
-    { key: 'sueldo_founder', question: '### 8. Sueldo del fundador\n\nSi vas a operar el negocio, que sueldo te asignarias para cubrir hasta 3 roles, que seria el mismo que le pagarias a otra persona por hacer cada rol? (Administracion, Comercial, Operacion)' },
-    { key: 'gastos_fijos', question: '### 9. Gastos fijos\n\nQue gastos fijos tienes que pagar aunque no vendas (renta, servicios, software)?' },
-    { key: 'gastos_variables', question: '### 10. Gastos variables\n\nQue % de tus ingresos pagas de gastos variables paraa entregar tu producto o servicio (materia prima, comisiones, impuestos)?' }
+    { key: 'giro', question: '### 1. Giro y nicho específico\n\nQué vendes exactamente y a quien va dirigido' },
+    { key: 'ubicacion', question: '### 2. Ubicación operativa\n\nEn qué ciudad, estado y pais opera el negocio' },
+    { key: 'madurez', question: '### 3. Madurez actual\n\nEs una idea en papel, un producto o servicio ya validado, o un negocio en marcha buscando escalar' },
+    { key: 'recursos', question: '### 4. Recursos disponibles\n\nCon qué recursos materiales, humanos, intelectuales (marca, procesos, patentes) y financieros cuentas actualmente' },
+    { key: 'ambicion', question: '### 5. Nivel de ambición financiera\n\nBuscas crear un autoempleo sostenible o una estructura escalable para levantar capital de inversionistas' },
+    { key: 'mision_vision', question: '### 6. Proposito Común, Misión y visión\n\nYa las tienes definidas (escríbelas) o prefieres que las diseñemos desde cero' },
+    { key: 'utilidad_deseada', question: '### 7. Utilidad mensual deseada\n\nCuánto dinero neto quisieras que sobrara de ganancias mensualmente para vivir (en tu moneda local)' },
+    { key: 'sueldo_founder', question: '### 8. Sueldo del fundador\n\nSi vas a operar el negocio, que sueldo te asignarías para cubrir hasta 3 roles, que seria el mismo que le pagarías a otra persona por hacer cada rol (Administración, Comercial, Operación)' },
+    { key: 'gastos_fijos', question: '### 9. Gastos fijos\n\nQué gastos fijos tienes que pagar aunque no vendas (renta, servicios, software)' },
+    { key: 'gastos_variables', question: '### 10. Gastos variables\n\nQué % de tus ingresos pagas de gastos variables paraa entregar tu producto o servicio (materia prima, comisiones, impuestos)' }
   ],
   en: [
     { key: 'giro', question: '### 1. Business Type and Niche\n\nWhat exactly do you sell and who is it for?' },
@@ -122,8 +122,8 @@ export default function BabelPage() {
   const phaseTemplate = function (phase: number): string {
     if (phase <= 0) return '';
     const templates: Record<number, string> = {
-      1: '### 1. Propuesta de Valor\n\n**Trabajos funcionales:** \n\n**Trabajos emocionales:** \n\n**Trabajos sociales:** \n\n---\n\n### 2. Modelo de Negocio\n\n**Segmento de clientes:** \n\n**Propuesta de valor:** \n\n**Canales:** \n\n**Fuentes de ingreso:** \n\n---\n\n### 3. Proposito (Golden Circle)\n\n**Why (Proposito):** \n\n**How (Diferenciacion):** \n\n**What (Que vendes):** \n\n---\n\n### 4. Segmentacion\n\n**Arquetipo 1:** \n\n**Oceano Azul:** \n\n**Impacto social:** \n\n---\n\n### 5. ODS y Fondos\n\n**ODS vinculados:** \n\n**Fondos sugeridos:**',
-      2: '### 1. Analisis PESTEL\n\n**Politico:** \n\n**Economico:** \n\n**Social:** \n\n**Tecnologico:** \n\n**Ecologico:** \n\n**Legal:** \n\n---\n\n### 2. Fuerzas del Mercado\n\n**Competidores directos:** \n\n**Competidores indirectos:** \n\n**Nuevos entrantes:** \n\n---\n\n### 3. Tendencias Sectoriales\n\n\n---\n\n### 4. Prospectiva a 5 Anos\n\n**Escenario optimista:** \n\n**Escenario conservador:**',
+      1: '### 1. Propuesta de Valor\n\n**Resultado que espera el cliente de tu producto o servicio:** \n\n**Beneficios funcionales:** \n\n**Beneficios emocionales:** \n\n**Beneficios atención:** \n\n---\n\n### 2. Modelo de Negocio\n\n**Segmento de clientes y usuarios:** \n\n**Canales de mercadotecnia:** \n\n**Fuentes de ingreso:** \n\n**Costos más importantes:** \n\n**Aliados, Socios y Proveedores:** \n\n**Recursos Humanos, Materiales, Intelectuales, Financieros:** \n\n---\n\n### 3. Proposito (Golden Circle)\n\n**Why (Proposito):** \n\n**How (Diferenciacion):** \n\n**What (Que vendes):** \n\n---\n\n### 4. Segmentacion\n\n**Arquetipo 1:** \n\n**Oceano Azul:** \n\n**Impacto social:** \n\n---\n\n###,
+      2: '### 1. Analisis PESTEL\n\n**Politico:** \n\n**Economico:** \n\n**Social:** \n\n**Tecnologico:** \n\n**Ecologico:** \n\n**Legal:** \n\n---\n\n### 2. Fuerzas del Mercado\n\n**Competidores directos:** \n\n**Competidores indirectos:** \n\n**Nuevos entrantes:** \n\n---\n\n### 3. Tendencias Sectoriales\n\n\n---\n\n### 4. Prospectiva a 5 Años\n\n**Escenario optimista:** \n\n**Escenario conservador:** \n\n---\n\n### 5. ODS y Fondos\n\n**ODS vinculados:** \n\n**Fondos sugeridos:**,
       3: '### 1. Capacidades Clave\n\n**Capacidades basicas:** \n\n**Capacidades diferenciadoras:** \n\n---\n\n### 2. Plan Operativo\n\n**Infraestructura:** \n\n**Cadena de suministro:** \n\n**Personal requerido:** \n\n---\n\n### 3. Estrategia Comercial\n\n**Marketing mix:** \n\n**Embudo de ventas:** \n\n**Customer Journey:**',
       4: '### 1. Costos de Arranque y OpEx\n\n**Costos de arranque:** \n\n**Gastos operativos mensuales:** \n\n---\n\n### 2. Estrategia de Precios\n\n\n---\n\n### 3. Flujo de Caja Ano 1\n\n**Mes 1:** \n\n**Mes 2-12:** \n\n---\n\n### 4. Estado de Resultados\n\n**Ano 1:** \n\n**Ano 3:** \n\n**Ano 5:**',
       5: '### 1. Balanced Scorecard + OKRs\n\n**Finanzas:** \n\n**Clientes:** \n\n**Procesos:** \n\n**Aprendizaje:** \n\n---\n\n### 2. Matriz de Impacto\n\n**Colaboradores:** \n\n**Sociedad:** \n\n**Medio ambiente:** \n\n---\n\n### 3. FODA Cruzado\n\n**Fortalezas:** \n\n**Oportunidades:** \n\n**Debilidades:** \n\n**Amenazas:** \n\n---\n\n### 4. Marco Agil\n\n\n---\n\n### 5. Elevator Pitch\n\n',
@@ -353,7 +353,10 @@ export default function BabelPage() {
 
       if ((refreshed.currentPhase ?? 0) >= BABEL_IMPLEMENTED_PHASES) {
         setSession(refreshed);
+        setSending(false);
+        setCompiling(true);
         await upsertCompiledPlan(refreshed.messages, refreshed.phases);
+        setCompiling(false);
         return;
       }
 
