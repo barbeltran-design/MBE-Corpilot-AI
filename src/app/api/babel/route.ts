@@ -18,12 +18,12 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // Proveedores de IA con fallback.
 //
-// Nivel 1 — Groq (gratis, 30 req/min):
-//   API key: console.groq.com | Modelo: llama-3.3-70b-versatile
-// Nivel 2 — OpenRouter (auto = OpenRouter elige el mejor modelo gratuito disponible):
-//   API key: openrouter.ai/keys | Modelo: auto
-// Nivel 3 — Gemini (cuota limitada):
+// Nivel 1 — Gemini (cuota limitada):
 //   API key: aistudio.google.com/apikey | Modelo: gemini-3.5-flash
+// Nivel 2 — Groq (gratis, 30 req/min):
+//   API key: console.groq.com | Modelo: llama-3.3-70b-versatile
+// Nivel 3 — OpenRouter (auto = OpenRouter elige el mejor modelo gratuito disponible):
+//   API key: openrouter.ai/keys | Modelo: auto
 // Nivel 4 — 9Router (router local, requiere túnel o VPS):
 //   npm install -g 9router && 9router | Endpoint: http://localhost:20128/v1
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
