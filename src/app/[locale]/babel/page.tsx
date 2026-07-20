@@ -15,7 +15,7 @@ import {
   updateBabelPhaseSummary,
 } from '@/lib/babel-session';
 import { BABEL_IMPLEMENTED_PHASES, babelApprovalMarker } from '@/lib/babel-constants';
-import { createCompiledPlanDeliverable } from '@/lib/deliverables';
+import { downloadCompiledPlanPdf } from '@/lib/deliverables';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 
@@ -484,6 +484,14 @@ export default function BabelPage() {
         }
       }
 
+      if (compiled) {
+        try {
+          downloadCompiledPlanPdf({ sessionTopic: session.topic, compiledText: compiled, language: locale });
+        } catch (pdfErr) {
+          console.error('[babel] No se pudo generar el PDF del plan compilado', pdfErr);
+        }
+      }
+
       let finalMessages: ChatMessage[];
       if (existingIdx >= 0) {
         finalMessages = baseMessages.map(function (m, i) {
@@ -491,16 +499,6 @@ export default function BabelPage() {
         });
       } else {
         const assistantMsg: ChatMessage = { role: 'assistant', content: compiledText, timestamp: Timestamp.now() };
-        if (compiled) {
-          try {
-            const deliverable = await createCompiledPlanDeliverable({
-              uid: uid, agentId: 'babel', sessionTopic: session.topic, compiledText: compiled, language: locale,
-            });
-            assistantMsg.deliverables = [deliverable];
-          } catch (deliverableErr) {
-            console.error('[babel] No se pudo generar el PDF del plan compilado', deliverableErr);
-          }
-        }
         finalMessages = [...baseMessages, assistantMsg];
       }
 
