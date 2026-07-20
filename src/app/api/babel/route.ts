@@ -23,13 +23,13 @@ import { NextRequest, NextResponse } from 'next/server';
 // Nivel 2 — OpenRouter (auto = OpenRouter elige el mejor modelo gratuito disponible):
 //   API key: openrouter.ai/keys | Modelo: auto
 // Nivel 3 — Gemini (cuota limitada):
-//   API key: aistudio.google.com/apikey | Modelo: gemini-2.5-flash
+//   API key: aistudio.google.com/apikey | Modelo: gemini-3.5-flash
 // Nivel 4 — 9Router (router local, requiere túnel o VPS):
 //   npm install -g 9router && 9router | Endpoint: http://localhost:20128/v1
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 const FALLBACK_ENDPOINT = process.env.FALLBACK_ENDPOINT || 'https://api.groq.com/openai/v1/chat/completions';
-const FALLBACK_MODEL = process.env.FALLBACK_MODEL || 'llama-3.1-8b-instant';
+const FALLBACK_MODEL = process.env.FALLBACK_MODEL || 'llama-3.3-70b-versatile';
 const TERTIARY_ENDPOINT = process.env.TERTIARY_ENDPOINT || 'https://openrouter.ai/api/v1/chat/completions';
 const TERTIARY_MODEL = process.env.TERTIARY_MODEL || 'openai/gpt-oss-20b:free';
 // 9Router — proxy local con 40+ providers gratuitos.
