@@ -46,6 +46,46 @@ const PHASE_0_QUESTIONS = {
     { key: 'gastos_variables', question: '### 10. Variable Costs\n\nWhat percentage of your revenue goes toward variable costs (raw materials, commissions, taxes) to deliver your product or service?' }
   ]
 };
+// Textos de interfaz que normalmente vienen de next-intl (t()), pero que
+// necesitamos poder mostrar en el idioma que el usuario elija con el
+// selector ES/EN, aunque no coincida con el idioma de la ruta (locale).
+// Cuando el idioma elegido SI coincide con la ruta, seguimos usando t()
+// (la traduccion real y probada); cuando el usuario cambia el selector,
+// usamos este respaldo.
+const UI_FALLBACK: Record<'es' | 'en', {
+  title: string;
+  subtitle: string;
+  loading: string;
+  send: string;
+  approveFinalButton: string;
+  approveButton: (phase: number) => string;
+  downloadDeliverable: string;
+  loadingReply: string;
+  placeholder: string;
+}> = {
+  es: {
+    title: 'Babel AI',
+    subtitle: 'Tu Strategic Business Architect. Vamos a construir juntos tu Plan de Negocio Estratégico Socioambiental, fase por fase.',
+    loading: 'Cargando...',
+    send: 'Enviar',
+    approveFinalButton: 'Aprobar y finalizar plan',
+    approveButton: function (phase: number) { return 'Aprobar Fase ' + phase + ' y continuar'; },
+    downloadDeliverable: 'Descargar entregable',
+    loadingReply: 'Babel está escribiendo...',
+    placeholder: 'Escribe tu mensaje...',
+  },
+  en: {
+    title: 'Babel AI',
+    subtitle: "Your Strategic Business Architect. Let's build your Socio-Environmental Strategic Business Plan together, phase by phase.",
+    loading: 'Loading...',
+    send: 'Send',
+    approveFinalButton: 'Approve and finish plan',
+    approveButton: function (phase: number) { return 'Approve Phase ' + phase + ' and continue'; },
+    downloadDeliverable: 'Download deliverable',
+    loadingReply: 'Babel is typing...',
+    placeholder: 'Type your message...',
+  },
+};
 // Convierte un valor numerico ingresado en un campo de $ o % a una fraccion
 // (0 a 1) del precio unitario. Reemplaza los parsers de texto libre que
 // concatenaban numeros por accidente: ahora cada campo es un input numerico
@@ -74,16 +114,18 @@ export default function BabelPage() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = React.useState(0);
   const [phase0Answers, setPhase0Answers] = React.useState<Record<string, string>>({});
   const [isPhase0Complete, setIsPhase0Complete] = React.useState(false);
+  // Idioma de DESPLIEGUE de toda la pagina (botones, preguntas, mensajes).
+  // Empieza igual al idioma de la ruta, pero el usuario lo puede cambiar
+  // en cualquier momento con el selector ES/EN sin perder su progreso.
+  // El idioma real del plan de negocio (lo que la IA redacta) sigue ligado
+  // a la ruta (locale) para no mezclar idiomas dentro del plan ya generado.
+  const [dispLang, setDispLang] = React.useState<'es' | 'en'>(locale);
   // Estado del mini-asistente de Objetivos Financieros (Fase 4.5) — ahora es
   // un formulario editable de 4 etapas (no chat de texto libre). Cada campo
   // es un input numerico independiente: ya no es posible concatenar varios
   // numeros por accidente. El resumen se recalcula en cada cambio.
   const [finActive, setFinActive] = React.useState(false);
   const [finStage, setFinStage] = React.useState(1);
-  // Idioma de despliegue SOLO para este mini-formulario. Es independiente
-  // del idioma del sitio (locale): el usuario puede cambiarlo en cualquier
-  // etapa con el selector ES/EN sin perder los datos ya ingresados.
-  const [finLang, setFinLang] = React.useState<'es' | 'en'>(locale);
   const [finReviewing, setFinReviewing] = React.useState(false);
   const [finSending, setFinSending] = React.useState(false);
   const [finError, setFinError] = React.useState<string | null>(null);
@@ -102,7 +144,7 @@ export default function BabelPage() {
   const [finMarketingPct, setFinMarketingPct] = React.useState(0);
   const [finDone, setFinDone] = React.useState(false);
   const bottomRef = React.useRef<HTMLDivElement>(null);
-  const questions = PHASE_0_QUESTIONS[locale];
+  const questions = PHASE_0_QUESTIONS[dispLang];
   // 1. Autenticacion y carga de sesion
   React.useEffect(() => {
     const auth = getFirebaseAuth();
@@ -126,14 +168,18 @@ export default function BabelPage() {
     if (!session || isPhase0Complete) return;
     if (session.messages.length === 0 && currentQuestionIndex === 0) {
       const firstQuestion = questions[0];
+      const introText =
+        dispLang === 'en'
+          ? 'Hi! I\'m **Babel**, MBE Corp\'s Strategic Business Architect & Sustainability Lead.\n\nTo get started on the right foot, I\'ll ask you **10 key questions**, one at a time. Take your time.\n\n**Note:** Use Enter to add a new line. The message is only sent when you press the "Send" button.\n\n---\n\n'
+          : 'Hola! Soy **Babel**, Strategic Business Architect & Sustainability Lead de MBE Corp.\n\nPara iniciar con el pie derecho, te hare **10 preguntas clave** una por una. Responde con calma.\n\n**Nota:** Usa la tecla Enter para bajar de renglon. El mensaje solo se envia cuando presionas el boton "Enviar".\n\n---\n\n';
       const questionMsg: ChatMessage = {
         role: 'assistant',
-        content: 'Hola! Soy **Babel**, Strategic Business Architect & Sustainability Lead de MBE Corp.\n\nPara iniciar con el pie derecho, te hare **10 preguntas clave** una por una. Responde con calma.\n\n**Nota:** Usa la tecla Enter para bajar de renglon. El mensaje solo se envia cuando presionas el boton "Enviar".\n\n---\n\n' + firstQuestion.question,
+        content: introText + firstQuestion.question,
         timestamp: Timestamp.now(),
       };
       setSession(prev => prev ? { ...prev, messages: [questionMsg] } : prev);
     }
-  }, [session, currentQuestionIndex, isPhase0Complete, questions]);
+  }, [session, currentQuestionIndex, isPhase0Complete, questions, dispLang]);
   const currentPhase = session?.currentPhase ?? 0;
   const allPhasesDone = currentPhase >= BABEL_IMPLEMENTED_PHASES;
   const lastMessage = session?.messages[session.messages.length - 1];
@@ -159,6 +205,29 @@ export default function BabelPage() {
     }
     return raw;
   }
+  // Selector de idioma de despliegue, reutilizado en el encabezado de
+  // ambas vistas (Fase 0 y chat normal).
+  function renderLangToggle() {
+    return (
+      <div className="flex items-center gap-1 text-xs text-slate-500">
+        <span>{dispLang === 'en' ? 'Language:' : 'Idioma:'}</span>
+        <button
+          type="button"
+          onClick={function () { setDispLang('es'); }}
+          className={'rounded px-2 py-0.5 font-medium ' + (dispLang === 'es' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200')}
+        >
+          ES
+        </button>
+        <button
+          type="button"
+          onClick={function () { setDispLang('en'); }}
+          className={'rounded px-2 py-0.5 font-medium ' + (dispLang === 'en' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200')}
+        >
+          EN
+        </button>
+      </div>
+    );
+  }
   // Si la sesion ya tiene fases aprobadas desde Firestore, salir del wizard
   React.useEffect(() => {
     if (session && (session.currentPhase ?? 0) > 0) {
@@ -182,16 +251,19 @@ export default function BabelPage() {
       setPhase0Answers(updatedAnswers);
       if (currentQuestionIndex === questions.length - 1) {
         // ULTIMA PREGUNTA: generar conclusion local (sin API)
-        const phase0Labels: Record<string, string> = locale === 'en'
+        const phase0Labels: Record<string, string> = dispLang === 'en'
           ? { giro: 'Business Type', ubicacion: 'Location', madurez: 'Maturity', recursos: 'Resources', ambicion: 'Ambition', mision_vision: 'Mission & Vision', utilidad_deseada: 'Desired Monthly Profit', sueldo_founder: 'Founder Salary', gastos_fijos: 'Fixed Costs', gastos_variables: 'Variable Costs' }
           : { giro: 'Giro y nicho', ubicacion: 'Ubicación', madurez: 'Madurez', recursos: 'Recursos', ambicion: 'Ambición', mision_vision: 'Misión y Visión', utilidad_deseada: 'Utilidad mensual deseada', sueldo_founder: 'Sueldo del fundador', gastos_fijos: 'Gastos fijos', gastos_variables: 'Gastos variables' };
         const conclusionLines = Object.entries(updatedAnswers).map(function (entry) {
           return '**' + (phase0Labels[entry[0]] ?? entry[0]) + ':** ' + entry[1];
         });
-        const conclusionBody = '### Resumen de Fase 0 — Calibración Inicial\n\n' + conclusionLines.join('\n\n---\n\n') + '\n\n---\n\n*¿Apruebas este resumen de la Fase 0 para continuar a la Fase 1?*';
+        const summaryLabel = dispLang === 'en' ? 'Phase 0 completed:' : 'Fase 0 completada:';
+        const conclusionHeader = dispLang === 'en' ? '### Phase 0 Summary — Initial Calibration' : '### Resumen de Fase 0 — Calibración Inicial';
+        const conclusionQuestion = dispLang === 'en' ? 'Do you approve this Phase 0 summary to continue to Phase 1?' : '¿Apruebas este resumen de la Fase 0 para continuar a la Fase 1?';
+        const conclusionBody = conclusionHeader + '\n\n' + conclusionLines.join('\n\n---\n\n') + '\n\n---\n\n*' + conclusionQuestion + '*';
         const summaryMsg: ChatMessage = {
           role: 'user',
-          content: 'Fase 0 completada:\n\n' + conclusionLines.join('\n\n'),
+          content: summaryLabel + '\n\n' + conclusionLines.join('\n\n'),
           timestamp: Timestamp.now(),
         };
         const assistantMsg: ChatMessage = {
@@ -226,9 +298,10 @@ export default function BabelPage() {
         const phase0Summary = Object.entries({ ...phase0Answers, [questions[currentQuestionIndex].key]: input.trim() })
           .map(function (entry) { return '**' + entry[0] + '**: ' + entry[1]; })
           .join('\n\n');
+        const summaryLabelRetry = dispLang === 'en' ? 'Phase 0 completed:' : 'Fase 0 completada:';
         const summaryMsg: ChatMessage = {
           role: 'user',
-          content: 'Fase 0 completada:\n\n' + phase0Summary,
+          content: summaryLabelRetry + '\n\n' + phase0Summary,
           timestamp: Timestamp.now(),
         };
         const allMessages = [...session.messages, userMsg, summaryMsg];
@@ -514,7 +587,6 @@ export default function BabelPage() {
   function handleStartFinancialGoals() {
     setFinActive(true);
     setFinStage(1);
-    setFinLang(locale);
     setFinReviewing(false);
     setFinSending(false);
     setFinError(null);
@@ -536,7 +608,6 @@ export default function BabelPage() {
   function handleCloseFinancialGoals() {
     setFinActive(false);
     setFinStage(1);
-    setFinLang(locale);
     setFinReviewing(false);
     setFinSending(false);
     setFinError(null);
@@ -586,7 +657,7 @@ export default function BabelPage() {
     setFinError(null);
     if (finStage === 1) {
       if (finUnitPrice <= 0) {
-        setFinError(finLang === 'en' ? 'Enter a sale price greater than zero.' : 'Ingresa un precio de venta mayor a cero.');
+        setFinError(dispLang === 'en' ? 'Enter a sale price greater than zero.' : 'Ingresa un precio de venta mayor a cero.');
         return;
       }
       const baseVarPct =
@@ -595,7 +666,7 @@ export default function BabelPage() {
         toAmountPct(finOtherValue, finOtherMode, finUnitPrice);
       if (baseVarPct >= 1) {
         setFinError(
-          finLang === 'en'
+          dispLang === 'en'
             ? 'Your variable costs already add up to 100% or more of your sale price. Adjust the numbers before continuing.'
             : 'Tus costos variables ya suman 100% o más de tu precio de venta. Ajusta los montos antes de continuar.'
         );
@@ -612,7 +683,7 @@ export default function BabelPage() {
       const extraVarPct = finVarItems.reduce(function (s, v) { return s + toAmountPct(v.value, v.mode, finUnitPrice); }, 0);
       if (baseVarPct + extraVarPct >= 1) {
         setFinError(
-          finLang === 'en'
+          dispLang === 'en'
             ? 'Adding your extra variable costs pushes the total to 100% or more of your price. Adjust the numbers before continuing.'
             : 'Al sumar tus costos variables adicionales, el total llega a 100% o más de tu precio. Ajusta los montos antes de continuar.'
         );
@@ -624,7 +695,7 @@ export default function BabelPage() {
     if (finStage === 3) {
       if (finChannels.length === 0) {
         setFinError(
-          finLang === 'en'
+          dispLang === 'en'
             ? 'Add at least one revenue channel before continuing.'
             : 'Agrega al menos un canal de ingreso antes de continuar.'
         );
@@ -633,7 +704,7 @@ export default function BabelPage() {
       const sum = finChannels.reduce(function (s, c) { return s + c.pct; }, 0);
       if (sum <= 0) {
         setFinError(
-          finLang === 'en'
+          dispLang === 'en'
             ? 'Enter a percentage greater than zero for at least one channel.'
             : 'Ingresa un porcentaje mayor a cero en al menos un canal.'
         );
@@ -672,7 +743,7 @@ export default function BabelPage() {
           ? finChannels.map(function (c) { return { name: c.name, pct: c.pct / channelPctSum }; })
           : finChannels.map(function (c) { return { name: c.name, pct: 0 }; });
       const goalsInput: FinancialGoalsInput = {
-        language: finLang,
+        language: dispLang,
         unitPrice: finUnitPrice,
         materialsPct: materialsPct,
         laborPct: laborPct,
@@ -687,7 +758,7 @@ export default function BabelPage() {
       downloadFinancialGoalsExcel(goalsInput);
       setFinDone(true);
     } catch (err) {
-      setFinError(err instanceof Error ? err.message : (finLang === 'en' ? 'Error generating file' : 'Error al generar el archivo'));
+      setFinError(err instanceof Error ? err.message : (dispLang === 'en' ? 'Error generating file' : 'Error al generar el archivo'));
     } finally {
       setFinSending(false);
     }
@@ -700,7 +771,7 @@ export default function BabelPage() {
   async function handleReset() {
     if (!uid) return;
     const confirmMsg =
-      locale === 'en'
+      dispLang === 'en'
         ? 'This will erase all progress in this session and start over from scratch. This cannot be undone. Continue?'
         : 'Esto borrara todo el progreso de esta sesion y empezara de nuevo desde cero. No se puede deshacer. Continuar?';
     if (!window.confirm(confirmMsg)) return;
@@ -720,7 +791,7 @@ export default function BabelPage() {
     }
   }
   if (!session) {
-    return <div className="flex min-h-screen items-center justify-center text-slate-500">{t('loading')}</div>;
+    return <div className="flex min-h-screen items-center justify-center text-slate-500">{dispLang === locale ? t('loading') : UI_FALLBACK[dispLang].loading}</div>;
   }
   // VISTA 1: WIZARD DE FASE 0 (Pregunta por pregunta)
   const isPhase0Active = currentPhase === 0 && currentQuestionIndex < questions.length && !isPhase0Complete;
@@ -729,12 +800,15 @@ export default function BabelPage() {
       <div className="mx-auto flex min-h-screen max-w-2xl flex-col gap-4 p-4 sm:p-6">
         <div className="flex items-center justify-between border-b pb-4">
           <div>
-            <h1 className="text-xl font-semibold text-slate-900">{t('title')}</h1>
-            <p className="text-sm text-slate-500">Fase 0: Calibracion Inicial</p>
+            <h1 className="text-xl font-semibold text-slate-900">{dispLang === locale ? t('title') : UI_FALLBACK[dispLang].title}</h1>
+            <p className="text-sm text-slate-500">{dispLang === 'en' ? 'Phase 0: Initial Calibration' : 'Fase 0: Calibración Inicial'}</p>
           </div>
-          <div className="flex gap-2">
-           <Button onClick={handleReset} disabled={sending} variant="outline" size="sm">Empezar de nuevo</Button>
-           <Button onClick={handleLogout} variant="outline" size="sm">Cerrar sesion</Button>
+          <div className="flex flex-col items-end gap-2">
+            {renderLangToggle()}
+            <div className="flex gap-2">
+              <Button onClick={handleReset} disabled={sending} variant="outline" size="sm">{dispLang === 'en' ? 'Start over' : 'Empezar de nuevo'}</Button>
+              <Button onClick={handleLogout} variant="outline" size="sm">{dispLang === 'en' ? 'Log out' : 'Cerrar sesión'}</Button>
+            </div>
           </div>
         </div>
         {/* Historial de respuestas previas */}
@@ -760,14 +834,14 @@ export default function BabelPage() {
                         }}
                         className="text-xs font-medium text-blue-600 hover:text-blue-800 underline underline-offset-2"
                       >
-                        {isExpanded ? 'Ver menos' : 'Ver todo'}
+                        {isExpanded ? (dispLang === 'en' ? 'See less' : 'Ver menos') : (dispLang === 'en' ? 'See all' : 'Ver todo')}
                       </button>
                       {m.role === 'assistant' && (
                         <button
                           onClick={function () { handleStartEdit(i, m.content); }}
                           className="text-xs font-medium text-blue-600 hover:text-blue-800 underline underline-offset-2"
                         >
-                          Editar
+                          {dispLang === 'en' ? 'Edit' : 'Editar'}
                         </button>
                       )}
                     </div>
@@ -781,7 +855,9 @@ export default function BabelPage() {
         <div className="w-full bg-slate-200 rounded-full h-2">
           <div className="bg-blue-600 h-2 rounded-full transition-all" style={{ width: String(((currentQuestionIndex + 1) / questions.length) * 100) + '%' }} />
         </div>
-        <p className="text-sm text-slate-600">Pregunta {currentQuestionIndex + 1} de {questions.length}</p>
+        <p className="text-sm text-slate-600">
+          {dispLang === 'en' ? 'Question' : 'Pregunta'} {currentQuestionIndex + 1} {dispLang === 'en' ? 'of' : 'de'} {questions.length}
+        </p>
         {error && (
           <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600 border border-red-200">
             <div className="mb-1">{friendlyError(error)}</div>
@@ -792,7 +868,7 @@ export default function BabelPage() {
                   disabled={sending}
                   className="text-xs font-medium text-red-700 underline underline-offset-2 hover:text-red-900 disabled:opacity-50"
                 >
-                  {sending ? 'Reintentando...' : 'Reintentar'}
+                  {sending ? (dispLang === 'en' ? 'Retrying...' : 'Reintentando...') : (dispLang === 'en' ? 'Retry' : 'Reintentar')}
                 </button>
               )}
               {currentQuestionIndex === questions.length - 1 && !showManualEditor && (
@@ -800,7 +876,7 @@ export default function BabelPage() {
                   onClick={function () { setShowManualEditor(true); }}
                   className="text-xs font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900"
                 >
-                  Escribir mi propia conclusion
+                  {dispLang === 'en' ? 'Write my own conclusion' : 'Escribir mi propia conclusion'}
                 </button>
               )}
             </div>
@@ -808,20 +884,20 @@ export default function BabelPage() {
         )}
         {showManualEditor && (
           <Card className="p-4 space-y-2">
-            <p className="text-sm font-medium text-slate-700">Escribe tu conclusion de la Fase 0 manualmente:</p>
+            <p className="text-sm font-medium text-slate-700">{dispLang === 'en' ? 'Write your Phase 0 conclusion manually:' : 'Escribe tu conclusion de la Fase 0 manualmente:'}</p>
             <textarea
               value={manualContent}
               onChange={function (e) { setManualContent(e.target.value); }}
               rows={10}
-              placeholder="Describe aqui el resumen de tu negocio..."
+              placeholder={dispLang === 'en' ? 'Describe your business summary here...' : 'Describe aqui el resumen de tu negocio...'}
               className="w-full resize-y rounded border border-slate-300 bg-white p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <div className="flex gap-2">
               <Button onClick={function () { setShowManualEditor(false); setManualContent(''); }} variant="outline" size="sm">
-                Cancelar
+                {dispLang === 'en' ? 'Cancel' : 'Cancelar'}
               </Button>
               <Button onClick={function () { manualApprovePhase(0, manualContent); }} disabled={sending || !manualContent.trim()} size="sm">
-                {sending ? 'Guardando...' : 'Guardar y aprobar Fase 0'}
+                {sending ? (dispLang === 'en' ? 'Saving...' : 'Guardando...') : (dispLang === 'en' ? 'Save and approve Phase 0' : 'Guardar y aprobar Fase 0')}
               </Button>
             </div>
           </Card>
@@ -846,13 +922,13 @@ export default function BabelPage() {
                   e.preventDefault();
                 }
               }}
-              placeholder="Escribe tu respuesta aqui..."
+              placeholder={dispLang === 'en' ? 'Type your answer here...' : 'Escribe tu respuesta aqui...'}
               disabled={sending}
               rows={3}
               className="flex-1 resize-none rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 min-h-[80px]"
             />
             <Button type="submit" disabled={sending || !input.trim()} className="mb-0 h-10">
-              {sending ? 'Enviando...' : t('send')}
+              {sending ? (dispLang === 'en' ? 'Sending...' : 'Enviando...') : (dispLang === locale ? t('send') : UI_FALLBACK[dispLang].send)}
             </Button>
           </form>
         </Card>
@@ -888,7 +964,7 @@ export default function BabelPage() {
   const finResultLive: FinancialGoalsResult | null =
     !finInvalid && finChannels.length > 0
       ? computeFinancialGoals({
-          language: finLang,
+          language: dispLang,
           unitPrice: finUnitPrice,
           materialsPct: finMaterialsPctLive,
           laborPct: finLaborPctLive,
@@ -906,12 +982,15 @@ export default function BabelPage() {
     <div className="mx-auto flex min-h-screen max-w-4xl flex-col gap-4 p-4 sm:p-6">
       <div className="flex items-center justify-between border-b pb-4">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">{t('title')}</h1>
-          <p className="text-sm text-slate-500">{(session as any).phaseData?.topic || t('subtitle')}</p>
+          <h1 className="text-xl font-semibold text-slate-900">{dispLang === locale ? t('title') : UI_FALLBACK[dispLang].title}</h1>
+          <p className="text-sm text-slate-500">{(session as any).phaseData?.topic || (dispLang === locale ? t('subtitle') : UI_FALLBACK[dispLang].subtitle)}</p>
         </div>
-        <div className="flex gap-2">
-         <Button onClick={handleReset} disabled={sending} variant="outline" size="sm">Empezar de nuevo</Button>
-         <Button onClick={handleLogout} variant="outline" size="sm">Cerrar sesion</Button>
+        <div className="flex flex-col items-end gap-2">
+          {renderLangToggle()}
+          <div className="flex gap-2">
+            <Button onClick={handleReset} disabled={sending} variant="outline" size="sm">{dispLang === 'en' ? 'Start over' : 'Empezar de nuevo'}</Button>
+            <Button onClick={handleLogout} variant="outline" size="sm">{dispLang === 'en' ? 'Log out' : 'Cerrar sesión'}</Button>
+          </div>
         </div>
       </div>
       <Card className="flex-1 space-y-3 overflow-y-auto p-4 min-h-[60vh]">
@@ -929,9 +1008,9 @@ export default function BabelPage() {
                     className="w-full resize-y rounded border border-blue-300 bg-white p-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   <div className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={handleCancelEdit} disabled={sending}>Cancelar</Button>
+                    <Button size="sm" variant="outline" onClick={handleCancelEdit} disabled={sending}>{dispLang === 'en' ? 'Cancel' : 'Cancelar'}</Button>
                     <Button size="sm" onClick={handleSaveEdit} disabled={sending || !editContent.trim()}>
-                      {sending ? 'Guardando...' : 'Guardar'}
+                      {sending ? (dispLang === 'en' ? 'Saving...' : 'Guardando...') : (dispLang === 'en' ? 'Save' : 'Guardar')}
                     </Button>
                   </div>
                 </div>
@@ -952,14 +1031,14 @@ export default function BabelPage() {
                     }}
                     className="text-xs font-medium text-blue-600 hover:text-blue-800 underline underline-offset-2"
                   >
-                    {isExpanded ? 'Ver menos' : 'Ver todo'}
+                    {isExpanded ? (dispLang === 'en' ? 'See less' : 'Ver menos') : (dispLang === 'en' ? 'See all' : 'Ver todo')}
                   </button>
                   {m.role === 'assistant' && !m.content.startsWith('### Plan Estrategico Compilado') && (
                     <button
                       onClick={function () { handleStartEdit(i, m.content); }}
                       className="text-xs font-medium text-blue-600 hover:text-blue-800 underline underline-offset-2"
                     >
-                      Editar
+                      {dispLang === 'en' ? 'Edit' : 'Editar'}
                     </button>
                   )}
                 </div>
@@ -969,7 +1048,7 @@ export default function BabelPage() {
                   {m.deliverables.map(function (d, di) {
                     return (
                       <a key={di} href={d.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900">
-                        {t('downloadDeliverable')}: {d.name}
+                        {dispLang === locale ? t('downloadDeliverable') : UI_FALLBACK[dispLang].downloadDeliverable}: {d.name}
                       </a>
                     );
                   })}
@@ -980,7 +1059,7 @@ export default function BabelPage() {
         })}
         {sending && (
           <div className="max-w-[85%] rounded-xl bg-slate-100 px-3.5 py-2 text-sm text-slate-500 animate-pulse">
-            {t('loadingReply')}
+            {dispLang === locale ? t('loadingReply') : UI_FALLBACK[dispLang].loadingReply}
           </div>
         )}
         <div ref={bottomRef} />
@@ -995,7 +1074,7 @@ export default function BabelPage() {
                 disabled={sending}
                 className="text-xs font-medium text-red-700 underline underline-offset-2 hover:text-red-900 disabled:opacity-50"
               >
-                {sending ? 'Reintentando...' : 'Reintentar'}
+                {sending ? (dispLang === 'en' ? 'Retrying...' : 'Reintentando...') : (dispLang === 'en' ? 'Retry' : 'Reintentar')}
               </button>
             )}
             {!showManualEditor && (
@@ -1003,7 +1082,7 @@ export default function BabelPage() {
                 onClick={function () { setShowManualEditor(true); }}
                 className="text-xs font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900"
               >
-                Escribir mi propia conclusion
+                {dispLang === 'en' ? 'Write my own conclusion' : 'Escribir mi propia conclusion'}
               </button>
             )}
           </div>
@@ -1011,20 +1090,20 @@ export default function BabelPage() {
       )}
       {showManualEditor && !awaitingApproval && (
         <Card className="p-4 space-y-2">
-          <p className="text-sm font-medium text-slate-700">Escribe tu conclusion para la Fase {currentPhase} manualmente:</p>
+          <p className="text-sm font-medium text-slate-700">{dispLang === 'en' ? 'Write your conclusion for Phase ' + currentPhase + ' manually:' : 'Escribe tu conclusion para la Fase ' + currentPhase + ' manualmente:'}</p>
           <textarea
             value={manualContent}
             onChange={function (e) { setManualContent(e.target.value); }}
             rows={10}
-            placeholder="Describe aqui tu analisis para esta fase..."
+            placeholder={dispLang === 'en' ? 'Describe your analysis for this phase here...' : 'Describe aqui tu analisis para esta fase...'}
             className="w-full resize-y rounded border border-slate-300 bg-white p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <div className="flex gap-2">
             <Button onClick={function () { setShowManualEditor(false); setManualContent(''); }} variant="outline" size="sm">
-              Cancelar
+              {dispLang === 'en' ? 'Cancel' : 'Cancelar'}
             </Button>
             <Button onClick={function () { manualApprovePhase(currentPhase, manualContent); }} disabled={sending || !manualContent.trim()} size="sm">
-              {sending ? 'Guardando...' : 'Guardar y aprobar Fase ' + String(currentPhase)}
+              {sending ? (dispLang === 'en' ? 'Saving...' : 'Guardando...') : (dispLang === 'en' ? 'Save and approve Phase ' + currentPhase : 'Guardar y aprobar Fase ' + String(currentPhase))}
             </Button>
           </div>
         </Card>
@@ -1033,25 +1112,27 @@ export default function BabelPage() {
       <div className="flex flex-col gap-2">
         {awaitingApproval && editingMessageIndex === null && !showManualEditor && (
           <Button onClick={function () { handleApprove(); }} disabled={sending}>
-            {allPhasesDone ? t('approveFinalButton') : t('approveButton', { phase: currentPhase })}
+            {allPhasesDone
+              ? (dispLang === locale ? t('approveFinalButton') : UI_FALLBACK[dispLang].approveFinalButton)
+              : (dispLang === locale ? t('approveButton', { phase: currentPhase }) : UI_FALLBACK[dispLang].approveButton(currentPhase))}
           </Button>
         )}
         {awaitingApproval && showManualEditor && (
           <Card className="p-4 space-y-2">
-            <p className="text-sm font-medium text-slate-700">Escribe tu propia conclusion para la Fase {currentPhase}:</p>
+            <p className="text-sm font-medium text-slate-700">{dispLang === 'en' ? 'Write your own conclusion for Phase ' + currentPhase + ':' : 'Escribe tu propia conclusion para la Fase ' + currentPhase + ':'}</p>
             <textarea
               value={manualContent}
               onChange={function (e) { setManualContent(e.target.value); }}
               rows={10}
-              placeholder="Describe aqui tu analisis para esta fase..."
+              placeholder={dispLang === 'en' ? 'Describe your analysis for this phase here...' : 'Describe aqui tu analisis para esta fase...'}
               className="w-full resize-y rounded border border-slate-300 bg-white p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <div className="flex gap-2">
               <Button onClick={function () { setShowManualEditor(false); setManualContent(''); }} variant="outline" size="sm">
-                Cancelar
+                {dispLang === 'en' ? 'Cancel' : 'Cancelar'}
               </Button>
               <Button onClick={function () { manualApprovePhase(currentPhase, manualContent); }} disabled={sending || !manualContent.trim()} size="sm">
-                {sending ? 'Guardando...' : 'Guardar y aprobar Fase ' + String(currentPhase)}
+                {sending ? (dispLang === 'en' ? 'Saving...' : 'Guardando...') : (dispLang === 'en' ? 'Save and approve Phase ' + currentPhase : 'Guardar y aprobar Fase ' + String(currentPhase))}
               </Button>
             </div>
           </Card>
@@ -1059,49 +1140,32 @@ export default function BabelPage() {
         {awaitingApproval && editingMessageIndex !== null && (
           <div className="flex gap-2">
             <Button onClick={handleCancelEdit} disabled={sending} variant="outline" className="flex-1">
-              Cancelar
+              {dispLang === 'en' ? 'Cancel' : 'Cancelar'}
             </Button>
             <Button onClick={function () { handleApprove(editContent); }} disabled={sending} className="flex-[2]">
-              Guardar y aprobar
+              {dispLang === 'en' ? 'Save and approve' : 'Guardar y aprobar'}
             </Button>
           </div>
         )}
         {allPhasesDone && !awaitingApproval && (
           <Button onClick={handleCompile} disabled={compiling} variant="outline" className="w-full">
-            {compiling ? 'Actualizando...' : 'Actualizar plan compilado'}
+            {compiling ? (dispLang === 'en' ? 'Updating...' : 'Actualizando...') : (dispLang === 'en' ? 'Update compiled plan' : 'Actualizar plan compilado')}
           </Button>
         )}
         {allPhasesDone && !awaitingApproval && !finActive && (
           <Button onClick={handleStartFinancialGoals} variant="outline" className="w-full">
-            {locale === 'en' ? 'Define financial goals (break-even + projection)' : 'Definir objetivos financieros (punto de equilibrio + proyección)'}
+            {dispLang === 'en' ? 'Define financial goals (break-even + projection)' : 'Definir objetivos financieros (punto de equilibrio + proyección)'}
           </Button>
         )}
         {finActive && (
           <Card className="p-4 space-y-3">
-            <div className="flex items-center justify-end gap-1 text-xs text-slate-500">
-              <span>{finLang === 'en' ? 'Language:' : 'Idioma:'}</span>
-              <button
-                type="button"
-                onClick={function () { setFinLang('es'); }}
-                className={'rounded px-2 py-0.5 font-medium ' + (finLang === 'es' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200')}
-              >
-                ES
-              </button>
-              <button
-                type="button"
-                onClick={function () { setFinLang('en'); }}
-                className={'rounded px-2 py-0.5 font-medium ' + (finLang === 'en' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200')}
-              >
-                EN
-              </button>
-            </div>
             {finDone ? (
               <div className="space-y-2 text-sm text-slate-800">
                 <p className="font-semibold">
-                  {finLang === 'en' ? 'Your financial goals file was downloaded.' : 'Tu archivo de metas propuestas se descargó.'}
+                  {dispLang === 'en' ? 'Your financial goals file was downloaded.' : 'Tu archivo de metas propuestas se descargó.'}
                 </p>
                 <Button onClick={handleCloseFinancialGoals} variant="outline" size="sm">
-                  {finLang === 'en' ? 'Close' : 'Cerrar'}
+                  {dispLang === 'en' ? 'Close' : 'Cerrar'}
                 </Button>
               </div>
             ) : (
@@ -1110,7 +1174,7 @@ export default function BabelPage() {
                   <div className="bg-blue-600 h-2 rounded-full transition-all" style={{ width: String((Math.min(finStage, 4) / 4) * 100) + '%' }} />
                 </div>
                 <p className="text-xs text-slate-500">
-                  {finLang === 'en' ? 'Stage' : 'Etapa'} {Math.min(finStage, 4)} {finLang === 'en' ? 'of 4' : 'de 4'}
+                  {dispLang === 'en' ? 'Stage' : 'Etapa'} {Math.min(finStage, 4)} {dispLang === 'en' ? 'of 4' : 'de 4'}
                 </p>
                 {finError && (
                   <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600 border border-red-200">
@@ -1120,9 +1184,9 @@ export default function BabelPage() {
 
                 {!finReviewing && finStage === 1 && (
                   <div className="space-y-3 text-sm text-slate-800">
-                    <p className="font-semibold">{finLang === 'en' ? 'Stage 1: Your product or service' : 'Etapa 1: Tu producto o servicio'}</p>
+                    <p className="font-semibold">{dispLang === 'en' ? 'Stage 1: Your product or service' : 'Etapa 1: Tu producto o servicio'}</p>
                     <label className="block space-y-1">
-                      <span className="text-xs text-slate-600">{finLang === 'en' ? 'Sale price per unit' : 'Precio de venta por unidad'}</span>
+                      <span className="text-xs text-slate-600">{dispLang === 'en' ? 'Sale price per unit' : 'Precio de venta por unidad'}</span>
                       <input
                         type="number"
                         value={finUnitPrice || ''}
@@ -1132,7 +1196,7 @@ export default function BabelPage() {
                       />
                     </label>
                     <div className="space-y-1">
-                      <span className="text-xs text-slate-600">{finLang === 'en' ? 'Materials cost' : 'Costo de materiales'}</span>
+                      <span className="text-xs text-slate-600">{dispLang === 'en' ? 'Materials cost' : 'Costo de materiales'}</span>
                       <div className="flex gap-2">
                         <input
                           type="number"
@@ -1151,7 +1215,7 @@ export default function BabelPage() {
                       </div>
                     </div>
                     <div className="space-y-1">
-                      <span className="text-xs text-slate-600">{finLang === 'en' ? 'Labor cost' : 'Costo de personal'}</span>
+                      <span className="text-xs text-slate-600">{dispLang === 'en' ? 'Labor cost' : 'Costo de personal'}</span>
                       <div className="flex gap-2">
                         <input
                           type="number"
@@ -1170,7 +1234,7 @@ export default function BabelPage() {
                       </div>
                     </div>
                     <div className="space-y-1">
-                      <span className="text-xs text-slate-600">{finLang === 'en' ? 'Other variable costs' : 'Otros costos variables'}</span>
+                      <span className="text-xs text-slate-600">{dispLang === 'en' ? 'Other variable costs' : 'Otros costos variables'}</span>
                       <div className="flex gap-2">
                         <input
                           type="number"
@@ -1189,7 +1253,7 @@ export default function BabelPage() {
                       </div>
                     </div>
                     <label className="block space-y-1">
-                      <span className="text-xs text-slate-600">{finLang === 'en' ? 'Total monthly fixed costs' : 'Gastos fijos mensuales totales'}</span>
+                      <span className="text-xs text-slate-600">{dispLang === 'en' ? 'Total monthly fixed costs' : 'Gastos fijos mensuales totales'}</span>
                       <input
                         type="number"
                         value={finFixedTotalInput || ''}
@@ -1198,7 +1262,7 @@ export default function BabelPage() {
                       />
                     </label>
                     <label className="block space-y-1">
-                      <span className="text-xs text-slate-600">{finLang === 'en' ? 'Desired monthly profit' : 'Utilidad mensual deseada'}</span>
+                      <span className="text-xs text-slate-600">{dispLang === 'en' ? 'Desired monthly profit' : 'Utilidad mensual deseada'}</span>
                       <input
                         type="number"
                         value={finDesiredProfit || ''}
@@ -1207,31 +1271,31 @@ export default function BabelPage() {
                       />
                     </label>
                     <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 space-y-1">
-                      <p>{finLang === 'en' ? '% Variable costs' : '% Costos variables'}: {(finBaseVarPct * 100).toFixed(1)}%</p>
+                      <p>{dispLang === 'en' ? '% Variable costs' : '% Costos variables'}: {(finBaseVarPct * 100).toFixed(1)}%</p>
                       {finStage1Invalid ? (
                         <p className="text-red-600 font-medium">
-                          {finLang === 'en'
+                          {dispLang === 'en'
                             ? 'Your variable costs already reach 100% or more of your price. Fix the numbers above before continuing.'
                             : 'Tus costos variables ya llegan a 100% o más de tu precio. Corrige los montos antes de continuar.'}
                         </p>
                       ) : (
                         <>
-                          <p>{finLang === 'en' ? 'Break-even point' : 'Punto de equilibrio'}: {finStage1BreakEven !== null ? finStage1BreakEven.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}</p>
-                          <p>{finLang === 'en' ? 'Revenue needed for your profit goal' : 'Ingreso necesario para tu meta de utilidad'}: {finStage1Target !== null ? finStage1Target.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}</p>
+                          <p>{dispLang === 'en' ? 'Break-even point' : 'Punto de equilibrio'}: {finStage1BreakEven !== null ? finStage1BreakEven.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}</p>
+                          <p>{dispLang === 'en' ? 'Revenue needed for your profit goal' : 'Ingreso necesario para tu meta de utilidad'}: {finStage1Target !== null ? finStage1Target.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}</p>
                         </>
                       )}
                     </div>
                     <div className="flex gap-2">
-                      <Button onClick={handleFinNext} size="sm">{finLang === 'en' ? 'Continue' : 'Continuar'}</Button>
+                      <Button onClick={handleFinNext} size="sm">{dispLang === 'en' ? 'Continue' : 'Continuar'}</Button>
                     </div>
                   </div>
                 )}
 
                 {!finReviewing && finStage === 2 && (
                   <div className="space-y-3 text-sm text-slate-800">
-                    <p className="font-semibold">{finLang === 'en' ? 'Stage 2: Break down your costs (optional)' : 'Etapa 2: Desglosa tus gastos (opcional)'}</p>
+                    <p className="font-semibold">{dispLang === 'en' ? 'Stage 2: Break down your costs (optional)' : 'Etapa 2: Desglosa tus gastos (opcional)'}</p>
                     <div className="space-y-2">
-                      <p className="text-xs font-medium text-slate-600">{finLang === 'en' ? 'Fixed costs' : 'Gastos fijos'}</p>
+                      <p className="text-xs font-medium text-slate-600">{dispLang === 'en' ? 'Fixed costs' : 'Gastos fijos'}</p>
                       {finFixedItems.map(function (item, i) {
                         return (
                           <div key={i} className="flex gap-2 items-center">
@@ -1239,7 +1303,7 @@ export default function BabelPage() {
                               type="text"
                               value={item.name}
                               onChange={function (e) { updateFixedItem(i, { name: e.target.value }); }}
-                              placeholder={finLang === 'en' ? 'Name (e.g. Rent)' : 'Nombre (ej. Renta)'}
+                              placeholder={dispLang === 'en' ? 'Name (e.g. Rent)' : 'Nombre (ej. Renta)'}
                               className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                             <input
@@ -1254,11 +1318,11 @@ export default function BabelPage() {
                         );
                       })}
                       <button type="button" onClick={addFixedItem} className="text-xs font-medium text-blue-600 hover:text-blue-800 underline underline-offset-2">
-                        {finLang === 'en' ? '+ Add fixed cost' : '+ Agregar gasto fijo'}
+                        {dispLang === 'en' ? '+ Add fixed cost' : '+ Agregar gasto fijo'}
                       </button>
                     </div>
                     <div className="space-y-2">
-                      <p className="text-xs font-medium text-slate-600">{finLang === 'en' ? 'Extra variable costs (besides materials, labor, other)' : 'Costos variables adicionales (además de materiales, personal, otros)'}</p>
+                      <p className="text-xs font-medium text-slate-600">{dispLang === 'en' ? 'Extra variable costs (besides materials, labor, other)' : 'Costos variables adicionales (además de materiales, personal, otros)'}</p>
                       {finVarItems.map(function (item, i) {
                         return (
                           <div key={i} className="flex gap-2 items-center">
@@ -1266,7 +1330,7 @@ export default function BabelPage() {
                               type="text"
                               value={item.name}
                               onChange={function (e) { updateVarItem(i, { name: e.target.value }); }}
-                              placeholder={finLang === 'en' ? 'Name (e.g. Commission)' : 'Nombre (ej. Comisión)'}
+                              placeholder={dispLang === 'en' ? 'Name (e.g. Commission)' : 'Nombre (ej. Comisión)'}
                               className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                             <input
@@ -1288,35 +1352,35 @@ export default function BabelPage() {
                         );
                       })}
                       <button type="button" onClick={addVarItem} className="text-xs font-medium text-blue-600 hover:text-blue-800 underline underline-offset-2">
-                        {finLang === 'en' ? '+ Add variable cost' : '+ Agregar costo variable'}
+                        {dispLang === 'en' ? '+ Add variable cost' : '+ Agregar costo variable'}
                       </button>
                     </div>
                     <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 space-y-1">
-                      <p>{finLang === 'en' ? 'Total fixed costs' : 'Total gastos fijos'}: {finItemizedFixedTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
-                      <p>{finLang === 'en' ? '% Variable costs' : '% Costos variables'}: {(finTotalVarPct * 100).toFixed(1)}%</p>
+                      <p>{dispLang === 'en' ? 'Total fixed costs' : 'Total gastos fijos'}: {finItemizedFixedTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                      <p>{dispLang === 'en' ? '% Variable costs' : '% Costos variables'}: {(finTotalVarPct * 100).toFixed(1)}%</p>
                       {finInvalid ? (
                         <p className="text-red-600 font-medium">
-                          {finLang === 'en'
+                          {dispLang === 'en'
                             ? 'Adding these extra costs pushes your variable costs to 100% or more of your price. Fix the numbers before continuing.'
                             : 'Al sumar estos costos, tus costos variables llegan a 100% o más de tu precio. Corrige los montos antes de continuar.'}
                         </p>
                       ) : (
                         <>
-                          <p>{finLang === 'en' ? 'Break-even point' : 'Punto de equilibrio'}: {finBreakEven !== null ? finBreakEven.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}</p>
-                          <p>{finLang === 'en' ? 'Revenue needed for your profit goal' : 'Ingreso necesario para tu meta de utilidad'}: {finTarget !== null ? finTarget.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}</p>
+                          <p>{dispLang === 'en' ? 'Break-even point' : 'Punto de equilibrio'}: {finBreakEven !== null ? finBreakEven.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}</p>
+                          <p>{dispLang === 'en' ? 'Revenue needed for your profit goal' : 'Ingreso necesario para tu meta de utilidad'}: {finTarget !== null ? finTarget.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}</p>
                         </>
                       )}
                     </div>
                     <div className="flex gap-2">
-                      <Button onClick={handleFinBack} variant="outline" size="sm">{finLang === 'en' ? 'Back' : 'Atrás'}</Button>
-                      <Button onClick={handleFinNext} size="sm">{finLang === 'en' ? 'Continue' : 'Continuar'}</Button>
+                      <Button onClick={handleFinBack} variant="outline" size="sm">{dispLang === 'en' ? 'Back' : 'Atrás'}</Button>
+                      <Button onClick={handleFinNext} size="sm">{dispLang === 'en' ? 'Continue' : 'Continuar'}</Button>
                     </div>
                   </div>
                 )}
 
                 {!finReviewing && finStage === 3 && (
                   <div className="space-y-3 text-sm text-slate-800">
-                    <p className="font-semibold">{finLang === 'en' ? 'Stage 3: Your revenue channels' : 'Etapa 3: Tus canales de ingreso'}</p>
+                    <p className="font-semibold">{dispLang === 'en' ? 'Stage 3: Your revenue channels' : 'Etapa 3: Tus canales de ingreso'}</p>
                     {finChannels.map(function (c, i) {
                       return (
                         <div key={i} className="flex gap-2 items-center">
@@ -1324,7 +1388,7 @@ export default function BabelPage() {
                             type="text"
                             value={c.name}
                             onChange={function (e) { updateChannel(i, { name: e.target.value }); }}
-                            placeholder={finLang === 'en' ? 'Name (e.g. Online sales)' : 'Nombre (ej. Ventas en línea)'}
+                            placeholder={dispLang === 'en' ? 'Name (e.g. Online sales)' : 'Nombre (ej. Ventas en línea)'}
                             className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
                           <input
@@ -1339,16 +1403,16 @@ export default function BabelPage() {
                       );
                     })}
                     <button type="button" onClick={addChannel} className="text-xs font-medium text-blue-600 hover:text-blue-800 underline underline-offset-2">
-                      {finLang === 'en' ? '+ Add channel' : '+ Agregar canal'}
+                      {dispLang === 'en' ? '+ Add channel' : '+ Agregar canal'}
                     </button>
                     {finChannels.length > 0 && (
                       <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 space-y-1">
                         {finChannelsNormalized.map(function (c, i) {
-                          return <p key={i}>{c.name || (finLang === 'en' ? '(unnamed)' : '(sin nombre)')}: {(c.pct * 100).toFixed(1)}%</p>;
+                          return <p key={i}>{c.name || (dispLang === 'en' ? '(unnamed)' : '(sin nombre)')}: {(c.pct * 100).toFixed(1)}%</p>;
                         })}
                         {Math.abs(finChannelPctSum - 100) > 2 && (
                           <p className="text-xs text-slate-500">
-                            {finLang === 'en'
+                            {dispLang === 'en'
                               ? "Your percentages didn't add up to 100%, so we'll adjust them proportionally."
                               : 'Tus porcentajes no suman 100%, los ajustaremos proporcionalmente.'}
                           </p>
@@ -1356,17 +1420,17 @@ export default function BabelPage() {
                       </div>
                     )}
                     <div className="flex gap-2">
-                      <Button onClick={handleFinBack} variant="outline" size="sm">{finLang === 'en' ? 'Back' : 'Atrás'}</Button>
-                      <Button onClick={handleFinNext} size="sm">{finLang === 'en' ? 'Continue' : 'Continuar'}</Button>
+                      <Button onClick={handleFinBack} variant="outline" size="sm">{dispLang === 'en' ? 'Back' : 'Atrás'}</Button>
+                      <Button onClick={handleFinNext} size="sm">{dispLang === 'en' ? 'Continue' : 'Continuar'}</Button>
                     </div>
                   </div>
                 )}
 
                 {!finReviewing && finStage === 4 && (
                   <div className="space-y-3 text-sm text-slate-800">
-                    <p className="font-semibold">{finLang === 'en' ? 'Stage 4: Marketing investment' : 'Etapa 4: Inversión en mercadotecnia'}</p>
+                    <p className="font-semibold">{dispLang === 'en' ? 'Stage 4: Marketing investment' : 'Etapa 4: Inversión en mercadotecnia'}</p>
                     <label className="block space-y-1">
-                      <span className="text-xs text-slate-600">{finLang === 'en' ? '% of revenue invested in marketing' : '% de ingresos invertido en mercadotecnia'}</span>
+                      <span className="text-xs text-slate-600">{dispLang === 'en' ? '% of revenue invested in marketing' : '% de ingresos invertido en mercadotecnia'}</span>
                       <input
                         type="number"
                         value={finMarketingPct || ''}
@@ -1377,19 +1441,19 @@ export default function BabelPage() {
                     </label>
                     {finResultLive && (
                       <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 space-y-1">
-                        <p>{finLang === 'en' ? 'Growth you can expect with that investment' : 'Crecimiento esperado con esa inversión'}: {(finResultLive.expectedGrowthRate * 100).toFixed(1)}% {finLang === 'en' ? 'monthly' : 'mensual'}</p>
-                        <p>{finLang === 'en' ? 'Growth needed to reach your goal in 12 months' : 'Crecimiento necesario para llegar a tu meta en 12 meses'}: {(finResultLive.requiredGrowthRate * 100).toFixed(1)}% {finLang === 'en' ? 'monthly' : 'mensual'}</p>
+                        <p>{dispLang === 'en' ? 'Growth you can expect with that investment' : 'Crecimiento esperado con esa inversión'}: {(finResultLive.expectedGrowthRate * 100).toFixed(1)}% {dispLang === 'en' ? 'monthly' : 'mensual'}</p>
+                        <p>{dispLang === 'en' ? 'Growth needed to reach your goal in 12 months' : 'Crecimiento necesario para llegar a tu meta en 12 meses'}: {(finResultLive.requiredGrowthRate * 100).toFixed(1)}% {dispLang === 'en' ? 'monthly' : 'mensual'}</p>
                         {finResultLive.isSufficient ? (
                           <p className="text-green-700 font-medium">
-                            {finLang === 'en' ? 'Your planned investment is enough to reach your goal.' : 'Tu inversión planeada es suficiente para llegar a tu meta.'}
+                            {dispLang === 'en' ? 'Your planned investment is enough to reach your goal.' : 'Tu inversión planeada es suficiente para llegar a tu meta.'}
                           </p>
                         ) : (
                           <p className="text-amber-700 font-medium">
                             {finResultLive.recommendedMarketingPct !== null
-                              ? (finLang === 'en'
+                              ? (dispLang === 'en'
                                   ? 'That investment is not enough. We recommend investing at least ' + (finResultLive.recommendedMarketingPct * 100).toFixed(0) + '% of your revenue (about ' + (finResultLive.recommendedMarketingAmount ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 }) + ' at the start).'
                                   : 'Con esa inversión no alcanzas tu meta. Te recomendamos invertir al menos ' + (finResultLive.recommendedMarketingPct * 100).toFixed(0) + '% de tus ingresos (aproximadamente ' + (finResultLive.recommendedMarketingAmount ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 }) + ' al inicio).')
-                              : (finLang === 'en'
+                              : (dispLang === 'en'
                                   ? 'Even a high marketing investment would not reach this goal in 12 months. Consider a longer timeline or a lower profit goal.'
                                   : 'Ni siquiera con una inversión alta se alcanza esta meta en 12 meses. Considera un plazo más largo o una meta de utilidad menor.')}
                           </p>
@@ -1397,24 +1461,24 @@ export default function BabelPage() {
                       </div>
                     )}
                     <div className="flex gap-2">
-                      <Button onClick={handleFinBack} variant="outline" size="sm">{finLang === 'en' ? 'Back' : 'Atrás'}</Button>
-                      <Button onClick={handleFinNext} size="sm">{finLang === 'en' ? 'Continue' : 'Continuar'}</Button>
+                      <Button onClick={handleFinBack} variant="outline" size="sm">{dispLang === 'en' ? 'Back' : 'Atrás'}</Button>
+                      <Button onClick={handleFinNext} size="sm">{dispLang === 'en' ? 'Continue' : 'Continuar'}</Button>
                     </div>
                   </div>
                 )}
 
                 {finReviewing && (
                   <div className="space-y-2 text-sm text-slate-800">
-                    <p className="font-semibold">{finLang === 'en' ? 'Before you download...' : 'Antes de descargar...'}</p>
+                    <p className="font-semibold">{dispLang === 'en' ? 'Before you download...' : 'Antes de descargar...'}</p>
                     <p>
-                      {finLang === 'en'
+                      {dispLang === 'en'
                         ? 'Take a look back at what you answered in Phase 0 (your business type, niche, and offer) to confirm these goals still make sense for your business. You can still go back and edit any field.'
                         : 'Revisa lo que respondiste en la Fase 0 (tu giro, nicho y oferta) para confirmar que estas metas sigan alineadas con tu negocio. Todavía puedes regresar y editar cualquier campo.'}
                     </p>
                     <div className="flex gap-2">
-                      <Button onClick={handleFinBack} variant="outline" size="sm">{finLang === 'en' ? 'Back' : 'Atrás'}</Button>
+                      <Button onClick={handleFinBack} variant="outline" size="sm">{dispLang === 'en' ? 'Back' : 'Atrás'}</Button>
                       <Button onClick={handleFinGenerate} disabled={finSending} size="sm">
-                        {finSending ? (finLang === 'en' ? 'Generating...' : 'Generando...') : (finLang === 'en' ? 'Generate file' : 'Generar archivo')}
+                        {finSending ? (dispLang === 'en' ? 'Generating...' : 'Generando...') : (dispLang === 'en' ? 'Generate file' : 'Generar archivo')}
                       </Button>
                     </div>
                   </div>
@@ -1425,7 +1489,7 @@ export default function BabelPage() {
                   onClick={handleCloseFinancialGoals}
                   className="text-xs font-medium text-slate-500 underline underline-offset-2 hover:text-slate-700"
                 >
-                  {finLang === 'en' ? 'Cancel' : 'Cancelar'}
+                  {dispLang === 'en' ? 'Cancel' : 'Cancelar'}
                 </button>
               </>
             )}
@@ -1450,13 +1514,13 @@ export default function BabelPage() {
                 e.preventDefault();
               }
             }}
-            placeholder={t('placeholder')}
+            placeholder={dispLang === locale ? t('placeholder') : UI_FALLBACK[dispLang].placeholder}
             disabled={sending || (awaitingApproval && editingMessageIndex === null && !showManualEditor)}
             rows={3}
             className="flex-1 resize-none rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 min-h-[80px]"
           />
           <Button type="submit" disabled={sending || (awaitingApproval && editingMessageIndex === null && !showManualEditor) || !input.trim()} className="mb-0 h-10">
-            {t('send')}
+            {dispLang === locale ? t('send') : UI_FALLBACK[dispLang].send}
           </Button>
         </form>
       </div>
