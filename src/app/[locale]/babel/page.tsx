@@ -80,6 +80,10 @@ export default function BabelPage() {
   // numeros por accidente. El resumen se recalcula en cada cambio.
   const [finActive, setFinActive] = React.useState(false);
   const [finStage, setFinStage] = React.useState(1);
+  // Idioma de despliegue SOLO para este mini-formulario. Es independiente
+  // del idioma del sitio (locale): el usuario puede cambiarlo en cualquier
+  // etapa con el selector ES/EN sin perder los datos ya ingresados.
+  const [finLang, setFinLang] = React.useState<'es' | 'en'>(locale);
   const [finReviewing, setFinReviewing] = React.useState(false);
   const [finSending, setFinSending] = React.useState(false);
   const [finError, setFinError] = React.useState<string | null>(null);
@@ -510,6 +514,7 @@ export default function BabelPage() {
   function handleStartFinancialGoals() {
     setFinActive(true);
     setFinStage(1);
+    setFinLang(locale);
     setFinReviewing(false);
     setFinSending(false);
     setFinError(null);
@@ -531,6 +536,7 @@ export default function BabelPage() {
   function handleCloseFinancialGoals() {
     setFinActive(false);
     setFinStage(1);
+    setFinLang(locale);
     setFinReviewing(false);
     setFinSending(false);
     setFinError(null);
@@ -580,7 +586,7 @@ export default function BabelPage() {
     setFinError(null);
     if (finStage === 1) {
       if (finUnitPrice <= 0) {
-        setFinError(locale === 'en' ? 'Enter a sale price greater than zero.' : 'Ingresa un precio de venta mayor a cero.');
+        setFinError(finLang === 'en' ? 'Enter a sale price greater than zero.' : 'Ingresa un precio de venta mayor a cero.');
         return;
       }
       const baseVarPct =
@@ -589,7 +595,7 @@ export default function BabelPage() {
         toAmountPct(finOtherValue, finOtherMode, finUnitPrice);
       if (baseVarPct >= 1) {
         setFinError(
-          locale === 'en'
+          finLang === 'en'
             ? 'Your variable costs already add up to 100% or more of your sale price. Adjust the numbers before continuing.'
             : 'Tus costos variables ya suman 100% o más de tu precio de venta. Ajusta los montos antes de continuar.'
         );
@@ -606,7 +612,7 @@ export default function BabelPage() {
       const extraVarPct = finVarItems.reduce(function (s, v) { return s + toAmountPct(v.value, v.mode, finUnitPrice); }, 0);
       if (baseVarPct + extraVarPct >= 1) {
         setFinError(
-          locale === 'en'
+          finLang === 'en'
             ? 'Adding your extra variable costs pushes the total to 100% or more of your price. Adjust the numbers before continuing.'
             : 'Al sumar tus costos variables adicionales, el total llega a 100% o más de tu precio. Ajusta los montos antes de continuar.'
         );
@@ -618,7 +624,7 @@ export default function BabelPage() {
     if (finStage === 3) {
       if (finChannels.length === 0) {
         setFinError(
-          locale === 'en'
+          finLang === 'en'
             ? 'Add at least one revenue channel before continuing.'
             : 'Agrega al menos un canal de ingreso antes de continuar.'
         );
@@ -627,7 +633,7 @@ export default function BabelPage() {
       const sum = finChannels.reduce(function (s, c) { return s + c.pct; }, 0);
       if (sum <= 0) {
         setFinError(
-          locale === 'en'
+          finLang === 'en'
             ? 'Enter a percentage greater than zero for at least one channel.'
             : 'Ingresa un porcentaje mayor a cero en al menos un canal.'
         );
@@ -666,7 +672,7 @@ export default function BabelPage() {
           ? finChannels.map(function (c) { return { name: c.name, pct: c.pct / channelPctSum }; })
           : finChannels.map(function (c) { return { name: c.name, pct: 0 }; });
       const goalsInput: FinancialGoalsInput = {
-        language: locale,
+        language: finLang,
         unitPrice: finUnitPrice,
         materialsPct: materialsPct,
         laborPct: laborPct,
@@ -681,7 +687,7 @@ export default function BabelPage() {
       downloadFinancialGoalsExcel(goalsInput);
       setFinDone(true);
     } catch (err) {
-      setFinError(err instanceof Error ? err.message : (locale === 'en' ? 'Error generating file' : 'Error al generar el archivo'));
+      setFinError(err instanceof Error ? err.message : (finLang === 'en' ? 'Error generating file' : 'Error al generar el archivo'));
     } finally {
       setFinSending(false);
     }
@@ -882,7 +888,7 @@ export default function BabelPage() {
   const finResultLive: FinancialGoalsResult | null =
     !finInvalid && finChannels.length > 0
       ? computeFinancialGoals({
-          language: locale,
+          language: finLang,
           unitPrice: finUnitPrice,
           materialsPct: finMaterialsPctLive,
           laborPct: finLaborPctLive,
@@ -1072,13 +1078,30 @@ export default function BabelPage() {
         )}
         {finActive && (
           <Card className="p-4 space-y-3">
+            <div className="flex items-center justify-end gap-1 text-xs text-slate-500">
+              <span>{finLang === 'en' ? 'Language:' : 'Idioma:'}</span>
+              <button
+                type="button"
+                onClick={function () { setFinLang('es'); }}
+                className={'rounded px-2 py-0.5 font-medium ' + (finLang === 'es' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200')}
+              >
+                ES
+              </button>
+              <button
+                type="button"
+                onClick={function () { setFinLang('en'); }}
+                className={'rounded px-2 py-0.5 font-medium ' + (finLang === 'en' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200')}
+              >
+                EN
+              </button>
+            </div>
             {finDone ? (
               <div className="space-y-2 text-sm text-slate-800">
                 <p className="font-semibold">
-                  {locale === 'en' ? 'Your financial goals file was downloaded.' : 'Tu archivo de metas propuestas se descargó.'}
+                  {finLang === 'en' ? 'Your financial goals file was downloaded.' : 'Tu archivo de metas propuestas se descargó.'}
                 </p>
                 <Button onClick={handleCloseFinancialGoals} variant="outline" size="sm">
-                  {locale === 'en' ? 'Close' : 'Cerrar'}
+                  {finLang === 'en' ? 'Close' : 'Cerrar'}
                 </Button>
               </div>
             ) : (
@@ -1087,7 +1110,7 @@ export default function BabelPage() {
                   <div className="bg-blue-600 h-2 rounded-full transition-all" style={{ width: String((Math.min(finStage, 4) / 4) * 100) + '%' }} />
                 </div>
                 <p className="text-xs text-slate-500">
-                  {locale === 'en' ? 'Stage' : 'Etapa'} {Math.min(finStage, 4)} {locale === 'en' ? 'of 4' : 'de 4'}
+                  {finLang === 'en' ? 'Stage' : 'Etapa'} {Math.min(finStage, 4)} {finLang === 'en' ? 'of 4' : 'de 4'}
                 </p>
                 {finError && (
                   <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600 border border-red-200">
@@ -1097,9 +1120,9 @@ export default function BabelPage() {
 
                 {!finReviewing && finStage === 1 && (
                   <div className="space-y-3 text-sm text-slate-800">
-                    <p className="font-semibold">{locale === 'en' ? 'Stage 1: Your product or service' : 'Etapa 1: Tu producto o servicio'}</p>
+                    <p className="font-semibold">{finLang === 'en' ? 'Stage 1: Your product or service' : 'Etapa 1: Tu producto o servicio'}</p>
                     <label className="block space-y-1">
-                      <span className="text-xs text-slate-600">{locale === 'en' ? 'Sale price per unit' : 'Precio de venta por unidad'}</span>
+                      <span className="text-xs text-slate-600">{finLang === 'en' ? 'Sale price per unit' : 'Precio de venta por unidad'}</span>
                       <input
                         type="number"
                         value={finUnitPrice || ''}
@@ -1109,7 +1132,7 @@ export default function BabelPage() {
                       />
                     </label>
                     <div className="space-y-1">
-                      <span className="text-xs text-slate-600">{locale === 'en' ? 'Materials cost' : 'Costo de materiales'}</span>
+                      <span className="text-xs text-slate-600">{finLang === 'en' ? 'Materials cost' : 'Costo de materiales'}</span>
                       <div className="flex gap-2">
                         <input
                           type="number"
@@ -1128,7 +1151,7 @@ export default function BabelPage() {
                       </div>
                     </div>
                     <div className="space-y-1">
-                      <span className="text-xs text-slate-600">{locale === 'en' ? 'Labor cost' : 'Costo de personal'}</span>
+                      <span className="text-xs text-slate-600">{finLang === 'en' ? 'Labor cost' : 'Costo de personal'}</span>
                       <div className="flex gap-2">
                         <input
                           type="number"
@@ -1147,7 +1170,7 @@ export default function BabelPage() {
                       </div>
                     </div>
                     <div className="space-y-1">
-                      <span className="text-xs text-slate-600">{locale === 'en' ? 'Other variable costs' : 'Otros costos variables'}</span>
+                      <span className="text-xs text-slate-600">{finLang === 'en' ? 'Other variable costs' : 'Otros costos variables'}</span>
                       <div className="flex gap-2">
                         <input
                           type="number"
@@ -1166,7 +1189,7 @@ export default function BabelPage() {
                       </div>
                     </div>
                     <label className="block space-y-1">
-                      <span className="text-xs text-slate-600">{locale === 'en' ? 'Total monthly fixed costs' : 'Gastos fijos mensuales totales'}</span>
+                      <span className="text-xs text-slate-600">{finLang === 'en' ? 'Total monthly fixed costs' : 'Gastos fijos mensuales totales'}</span>
                       <input
                         type="number"
                         value={finFixedTotalInput || ''}
@@ -1175,7 +1198,7 @@ export default function BabelPage() {
                       />
                     </label>
                     <label className="block space-y-1">
-                      <span className="text-xs text-slate-600">{locale === 'en' ? 'Desired monthly profit' : 'Utilidad mensual deseada'}</span>
+                      <span className="text-xs text-slate-600">{finLang === 'en' ? 'Desired monthly profit' : 'Utilidad mensual deseada'}</span>
                       <input
                         type="number"
                         value={finDesiredProfit || ''}
@@ -1184,31 +1207,31 @@ export default function BabelPage() {
                       />
                     </label>
                     <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 space-y-1">
-                      <p>{locale === 'en' ? '% Variable costs' : '% Costos variables'}: {(finBaseVarPct * 100).toFixed(1)}%</p>
+                      <p>{finLang === 'en' ? '% Variable costs' : '% Costos variables'}: {(finBaseVarPct * 100).toFixed(1)}%</p>
                       {finStage1Invalid ? (
                         <p className="text-red-600 font-medium">
-                          {locale === 'en'
+                          {finLang === 'en'
                             ? 'Your variable costs already reach 100% or more of your price. Fix the numbers above before continuing.'
                             : 'Tus costos variables ya llegan a 100% o más de tu precio. Corrige los montos antes de continuar.'}
                         </p>
                       ) : (
                         <>
-                          <p>{locale === 'en' ? 'Break-even point' : 'Punto de equilibrio'}: {finStage1BreakEven !== null ? finStage1BreakEven.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}</p>
-                          <p>{locale === 'en' ? 'Revenue needed for your profit goal' : 'Ingreso necesario para tu meta de utilidad'}: {finStage1Target !== null ? finStage1Target.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}</p>
+                          <p>{finLang === 'en' ? 'Break-even point' : 'Punto de equilibrio'}: {finStage1BreakEven !== null ? finStage1BreakEven.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}</p>
+                          <p>{finLang === 'en' ? 'Revenue needed for your profit goal' : 'Ingreso necesario para tu meta de utilidad'}: {finStage1Target !== null ? finStage1Target.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}</p>
                         </>
                       )}
                     </div>
                     <div className="flex gap-2">
-                      <Button onClick={handleFinNext} size="sm">{locale === 'en' ? 'Continue' : 'Continuar'}</Button>
+                      <Button onClick={handleFinNext} size="sm">{finLang === 'en' ? 'Continue' : 'Continuar'}</Button>
                     </div>
                   </div>
                 )}
 
                 {!finReviewing && finStage === 2 && (
                   <div className="space-y-3 text-sm text-slate-800">
-                    <p className="font-semibold">{locale === 'en' ? 'Stage 2: Break down your costs (optional)' : 'Etapa 2: Desglosa tus gastos (opcional)'}</p>
+                    <p className="font-semibold">{finLang === 'en' ? 'Stage 2: Break down your costs (optional)' : 'Etapa 2: Desglosa tus gastos (opcional)'}</p>
                     <div className="space-y-2">
-                      <p className="text-xs font-medium text-slate-600">{locale === 'en' ? 'Fixed costs' : 'Gastos fijos'}</p>
+                      <p className="text-xs font-medium text-slate-600">{finLang === 'en' ? 'Fixed costs' : 'Gastos fijos'}</p>
                       {finFixedItems.map(function (item, i) {
                         return (
                           <div key={i} className="flex gap-2 items-center">
@@ -1216,7 +1239,7 @@ export default function BabelPage() {
                               type="text"
                               value={item.name}
                               onChange={function (e) { updateFixedItem(i, { name: e.target.value }); }}
-                              placeholder={locale === 'en' ? 'Name (e.g. Rent)' : 'Nombre (ej. Renta)'}
+                              placeholder={finLang === 'en' ? 'Name (e.g. Rent)' : 'Nombre (ej. Renta)'}
                               className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                             <input
@@ -1231,11 +1254,11 @@ export default function BabelPage() {
                         );
                       })}
                       <button type="button" onClick={addFixedItem} className="text-xs font-medium text-blue-600 hover:text-blue-800 underline underline-offset-2">
-                        {locale === 'en' ? '+ Add fixed cost' : '+ Agregar gasto fijo'}
+                        {finLang === 'en' ? '+ Add fixed cost' : '+ Agregar gasto fijo'}
                       </button>
                     </div>
                     <div className="space-y-2">
-                      <p className="text-xs font-medium text-slate-600">{locale === 'en' ? 'Extra variable costs (besides materials, labor, other)' : 'Costos variables adicionales (además de materiales, personal, otros)'}</p>
+                      <p className="text-xs font-medium text-slate-600">{finLang === 'en' ? 'Extra variable costs (besides materials, labor, other)' : 'Costos variables adicionales (además de materiales, personal, otros)'}</p>
                       {finVarItems.map(function (item, i) {
                         return (
                           <div key={i} className="flex gap-2 items-center">
@@ -1243,7 +1266,7 @@ export default function BabelPage() {
                               type="text"
                               value={item.name}
                               onChange={function (e) { updateVarItem(i, { name: e.target.value }); }}
-                              placeholder={locale === 'en' ? 'Name (e.g. Commission)' : 'Nombre (ej. Comisión)'}
+                              placeholder={finLang === 'en' ? 'Name (e.g. Commission)' : 'Nombre (ej. Comisión)'}
                               className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                             <input
@@ -1265,35 +1288,35 @@ export default function BabelPage() {
                         );
                       })}
                       <button type="button" onClick={addVarItem} className="text-xs font-medium text-blue-600 hover:text-blue-800 underline underline-offset-2">
-                        {locale === 'en' ? '+ Add variable cost' : '+ Agregar costo variable'}
+                        {finLang === 'en' ? '+ Add variable cost' : '+ Agregar costo variable'}
                       </button>
                     </div>
                     <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 space-y-1">
-                      <p>{locale === 'en' ? 'Total fixed costs' : 'Total gastos fijos'}: {finItemizedFixedTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
-                      <p>{locale === 'en' ? '% Variable costs' : '% Costos variables'}: {(finTotalVarPct * 100).toFixed(1)}%</p>
+                      <p>{finLang === 'en' ? 'Total fixed costs' : 'Total gastos fijos'}: {finItemizedFixedTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                      <p>{finLang === 'en' ? '% Variable costs' : '% Costos variables'}: {(finTotalVarPct * 100).toFixed(1)}%</p>
                       {finInvalid ? (
                         <p className="text-red-600 font-medium">
-                          {locale === 'en'
+                          {finLang === 'en'
                             ? 'Adding these extra costs pushes your variable costs to 100% or more of your price. Fix the numbers before continuing.'
                             : 'Al sumar estos costos, tus costos variables llegan a 100% o más de tu precio. Corrige los montos antes de continuar.'}
                         </p>
                       ) : (
                         <>
-                          <p>{locale === 'en' ? 'Break-even point' : 'Punto de equilibrio'}: {finBreakEven !== null ? finBreakEven.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}</p>
-                          <p>{locale === 'en' ? 'Revenue needed for your profit goal' : 'Ingreso necesario para tu meta de utilidad'}: {finTarget !== null ? finTarget.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}</p>
+                          <p>{finLang === 'en' ? 'Break-even point' : 'Punto de equilibrio'}: {finBreakEven !== null ? finBreakEven.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}</p>
+                          <p>{finLang === 'en' ? 'Revenue needed for your profit goal' : 'Ingreso necesario para tu meta de utilidad'}: {finTarget !== null ? finTarget.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}</p>
                         </>
                       )}
                     </div>
                     <div className="flex gap-2">
-                      <Button onClick={handleFinBack} variant="outline" size="sm">{locale === 'en' ? 'Back' : 'Atrás'}</Button>
-                      <Button onClick={handleFinNext} size="sm">{locale === 'en' ? 'Continue' : 'Continuar'}</Button>
+                      <Button onClick={handleFinBack} variant="outline" size="sm">{finLang === 'en' ? 'Back' : 'Atrás'}</Button>
+                      <Button onClick={handleFinNext} size="sm">{finLang === 'en' ? 'Continue' : 'Continuar'}</Button>
                     </div>
                   </div>
                 )}
 
                 {!finReviewing && finStage === 3 && (
                   <div className="space-y-3 text-sm text-slate-800">
-                    <p className="font-semibold">{locale === 'en' ? 'Stage 3: Your revenue channels' : 'Etapa 3: Tus canales de ingreso'}</p>
+                    <p className="font-semibold">{finLang === 'en' ? 'Stage 3: Your revenue channels' : 'Etapa 3: Tus canales de ingreso'}</p>
                     {finChannels.map(function (c, i) {
                       return (
                         <div key={i} className="flex gap-2 items-center">
@@ -1301,7 +1324,7 @@ export default function BabelPage() {
                             type="text"
                             value={c.name}
                             onChange={function (e) { updateChannel(i, { name: e.target.value }); }}
-                            placeholder={locale === 'en' ? 'Name (e.g. Online sales)' : 'Nombre (ej. Ventas en línea)'}
+                            placeholder={finLang === 'en' ? 'Name (e.g. Online sales)' : 'Nombre (ej. Ventas en línea)'}
                             className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
                           <input
@@ -1316,16 +1339,16 @@ export default function BabelPage() {
                       );
                     })}
                     <button type="button" onClick={addChannel} className="text-xs font-medium text-blue-600 hover:text-blue-800 underline underline-offset-2">
-                      {locale === 'en' ? '+ Add channel' : '+ Agregar canal'}
+                      {finLang === 'en' ? '+ Add channel' : '+ Agregar canal'}
                     </button>
                     {finChannels.length > 0 && (
                       <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 space-y-1">
                         {finChannelsNormalized.map(function (c, i) {
-                          return <p key={i}>{c.name || (locale === 'en' ? '(unnamed)' : '(sin nombre)')}: {(c.pct * 100).toFixed(1)}%</p>;
+                          return <p key={i}>{c.name || (finLang === 'en' ? '(unnamed)' : '(sin nombre)')}: {(c.pct * 100).toFixed(1)}%</p>;
                         })}
                         {Math.abs(finChannelPctSum - 100) > 2 && (
                           <p className="text-xs text-slate-500">
-                            {locale === 'en'
+                            {finLang === 'en'
                               ? "Your percentages didn't add up to 100%, so we'll adjust them proportionally."
                               : 'Tus porcentajes no suman 100%, los ajustaremos proporcionalmente.'}
                           </p>
@@ -1333,17 +1356,17 @@ export default function BabelPage() {
                       </div>
                     )}
                     <div className="flex gap-2">
-                      <Button onClick={handleFinBack} variant="outline" size="sm">{locale === 'en' ? 'Back' : 'Atrás'}</Button>
-                      <Button onClick={handleFinNext} size="sm">{locale === 'en' ? 'Continue' : 'Continuar'}</Button>
+                      <Button onClick={handleFinBack} variant="outline" size="sm">{finLang === 'en' ? 'Back' : 'Atrás'}</Button>
+                      <Button onClick={handleFinNext} size="sm">{finLang === 'en' ? 'Continue' : 'Continuar'}</Button>
                     </div>
                   </div>
                 )}
 
                 {!finReviewing && finStage === 4 && (
                   <div className="space-y-3 text-sm text-slate-800">
-                    <p className="font-semibold">{locale === 'en' ? 'Stage 4: Marketing investment' : 'Etapa 4: Inversión en mercadotecnia'}</p>
+                    <p className="font-semibold">{finLang === 'en' ? 'Stage 4: Marketing investment' : 'Etapa 4: Inversión en mercadotecnia'}</p>
                     <label className="block space-y-1">
-                      <span className="text-xs text-slate-600">{locale === 'en' ? '% of revenue invested in marketing' : '% de ingresos invertido en mercadotecnia'}</span>
+                      <span className="text-xs text-slate-600">{finLang === 'en' ? '% of revenue invested in marketing' : '% de ingresos invertido en mercadotecnia'}</span>
                       <input
                         type="number"
                         value={finMarketingPct || ''}
@@ -1354,19 +1377,19 @@ export default function BabelPage() {
                     </label>
                     {finResultLive && (
                       <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 space-y-1">
-                        <p>{locale === 'en' ? 'Growth you can expect with that investment' : 'Crecimiento esperado con esa inversión'}: {(finResultLive.expectedGrowthRate * 100).toFixed(1)}% {locale === 'en' ? 'monthly' : 'mensual'}</p>
-                        <p>{locale === 'en' ? 'Growth needed to reach your goal in 12 months' : 'Crecimiento necesario para llegar a tu meta en 12 meses'}: {(finResultLive.requiredGrowthRate * 100).toFixed(1)}% {locale === 'en' ? 'monthly' : 'mensual'}</p>
+                        <p>{finLang === 'en' ? 'Growth you can expect with that investment' : 'Crecimiento esperado con esa inversión'}: {(finResultLive.expectedGrowthRate * 100).toFixed(1)}% {finLang === 'en' ? 'monthly' : 'mensual'}</p>
+                        <p>{finLang === 'en' ? 'Growth needed to reach your goal in 12 months' : 'Crecimiento necesario para llegar a tu meta en 12 meses'}: {(finResultLive.requiredGrowthRate * 100).toFixed(1)}% {finLang === 'en' ? 'monthly' : 'mensual'}</p>
                         {finResultLive.isSufficient ? (
                           <p className="text-green-700 font-medium">
-                            {locale === 'en' ? 'Your planned investment is enough to reach your goal.' : 'Tu inversión planeada es suficiente para llegar a tu meta.'}
+                            {finLang === 'en' ? 'Your planned investment is enough to reach your goal.' : 'Tu inversión planeada es suficiente para llegar a tu meta.'}
                           </p>
                         ) : (
                           <p className="text-amber-700 font-medium">
                             {finResultLive.recommendedMarketingPct !== null
-                              ? (locale === 'en'
+                              ? (finLang === 'en'
                                   ? 'That investment is not enough. We recommend investing at least ' + (finResultLive.recommendedMarketingPct * 100).toFixed(0) + '% of your revenue (about ' + (finResultLive.recommendedMarketingAmount ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 }) + ' at the start).'
                                   : 'Con esa inversión no alcanzas tu meta. Te recomendamos invertir al menos ' + (finResultLive.recommendedMarketingPct * 100).toFixed(0) + '% de tus ingresos (aproximadamente ' + (finResultLive.recommendedMarketingAmount ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 }) + ' al inicio).')
-                              : (locale === 'en'
+                              : (finLang === 'en'
                                   ? 'Even a high marketing investment would not reach this goal in 12 months. Consider a longer timeline or a lower profit goal.'
                                   : 'Ni siquiera con una inversión alta se alcanza esta meta en 12 meses. Considera un plazo más largo o una meta de utilidad menor.')}
                           </p>
@@ -1374,24 +1397,24 @@ export default function BabelPage() {
                       </div>
                     )}
                     <div className="flex gap-2">
-                      <Button onClick={handleFinBack} variant="outline" size="sm">{locale === 'en' ? 'Back' : 'Atrás'}</Button>
-                      <Button onClick={handleFinNext} size="sm">{locale === 'en' ? 'Continue' : 'Continuar'}</Button>
+                      <Button onClick={handleFinBack} variant="outline" size="sm">{finLang === 'en' ? 'Back' : 'Atrás'}</Button>
+                      <Button onClick={handleFinNext} size="sm">{finLang === 'en' ? 'Continue' : 'Continuar'}</Button>
                     </div>
                   </div>
                 )}
 
                 {finReviewing && (
                   <div className="space-y-2 text-sm text-slate-800">
-                    <p className="font-semibold">{locale === 'en' ? 'Before you download...' : 'Antes de descargar...'}</p>
+                    <p className="font-semibold">{finLang === 'en' ? 'Before you download...' : 'Antes de descargar...'}</p>
                     <p>
-                      {locale === 'en'
+                      {finLang === 'en'
                         ? 'Take a look back at what you answered in Phase 0 (your business type, niche, and offer) to confirm these goals still make sense for your business. You can still go back and edit any field.'
                         : 'Revisa lo que respondiste en la Fase 0 (tu giro, nicho y oferta) para confirmar que estas metas sigan alineadas con tu negocio. Todavía puedes regresar y editar cualquier campo.'}
                     </p>
                     <div className="flex gap-2">
-                      <Button onClick={handleFinBack} variant="outline" size="sm">{locale === 'en' ? 'Back' : 'Atrás'}</Button>
+                      <Button onClick={handleFinBack} variant="outline" size="sm">{finLang === 'en' ? 'Back' : 'Atrás'}</Button>
                       <Button onClick={handleFinGenerate} disabled={finSending} size="sm">
-                        {finSending ? (locale === 'en' ? 'Generating...' : 'Generando...') : (locale === 'en' ? 'Generate file' : 'Generar archivo')}
+                        {finSending ? (finLang === 'en' ? 'Generating...' : 'Generando...') : (finLang === 'en' ? 'Generate file' : 'Generar archivo')}
                       </Button>
                     </div>
                   </div>
@@ -1402,7 +1425,7 @@ export default function BabelPage() {
                   onClick={handleCloseFinancialGoals}
                   className="text-xs font-medium text-slate-500 underline underline-offset-2 hover:text-slate-700"
                 >
-                  {locale === 'en' ? 'Cancel' : 'Cancelar'}
+                  {finLang === 'en' ? 'Cancel' : 'Cancelar'}
                 </button>
               </>
             )}
