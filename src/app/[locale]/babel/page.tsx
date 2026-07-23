@@ -1,5 +1,4 @@
 'use client';
-
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
@@ -19,9 +18,7 @@ import { downloadCompiledPlanPdf, downloadFinancialGoalsExcel, computeFinancialG
 import type { FinancialGoalsInput, FinancialGoalsResult } from '@/lib/deliverables';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-
 import type { BabelPhaseRecord, ChatMessage, SessionDoc } from '@/types/firestore';
-
 // Preguntas de la Fase 0 (una por una)
 const PHASE_0_QUESTIONS = {
   es: [
@@ -49,189 +46,18 @@ const PHASE_0_QUESTIONS = {
     { key: 'gastos_variables', question: '### 10. Variable Costs\n\nWhat percentage of your revenue goes toward variable costs (raw materials, commissions, taxes) to deliver your product or service?' }
   ]
 };
-
-function parseNumberLoose(text: string): number {
-  const cleaned = text.replace(/[^0-9.\-]/g, '');
-  const n = parseFloat(cleaned);
-  return Number.isFinite(n) ? n : 0;
+// Convierte un valor numerico ingresado en un campo de $ o % a una fraccion
+// (0 a 1) del precio unitario. Reemplaza los parsers de texto libre que
+// concatenaban numeros por accidente: ahora cada campo es un input numerico
+// independiente, asi que esto ya no puede pasar.
+function toAmountPct(value: number, mode: '$' | '%', unitPrice: number): number {
+  if (mode === '%') return value / 100;
+  return unitPrice > 0 ? value / unitPrice : 0;
 }
-
-function parsePercentLoose(text: string): number {
-  const n = parseNumberLoose(text);
-  return n > 1 ? n / 100 : n;
-}
-
-// Detecta si el usuario quiere terminar una lista (gastos fijos, costos
-// variables extra o canales) en el mini-asistente de Objetivos Financieros.
-function isDoneWord(text: string): boolean {
-  const t = text.trim().toLowerCase();
-  return (
-    t === 'listo' ||
-    t === 'ninguno' ||
-    t === 'ninguna' ||
-    t === 'no' ||
-    t === 'ya' ||
-    t === 'termine' ||
-    t === 'termine.' ||
-    t === 'termino' ||
-    t === 'done' ||
-    t === 'none' ||
-    t === 'no more' ||
-    t === 'finish' ||
-    t === 'ready'
-  );
-}
-
-// Convierte una respuesta a % del precio unitario, aceptando monto ($) o
-// porcentaje (%). Si trae "%" se toma directo como porcentaje; si no, se
-// asume que es un monto en pesos y se calcula el % dividiendo entre el
-// precio unitario.
-function parseAmountOrPercent(text: string, unitPrice: number): number {
-  const raw = text.trim();
-  const hasPercent = /%/.test(raw) || /por\s*ciento/i.test(raw);
-  const num = parseNumberLoose(raw);
-  if (hasPercent) return num / 100;
-  return unitPrice > 0 ? num / unitPrice : 0;
-}
-
-// Pasos del mini-asistente de Objetivos Financieros (Fase 4.5), disponible
-// una vez que las 6 fases de Babel estan aprobadas. Es completamente
-// independiente del historial de chat / Firestore: solo vive en el estado
-// local de esta pantalla y termina generando un Excel descargable de 2
-// pestanas (Metas al Punto de Equilibrio + Proyeccion 12 Meses).
-type FinStepId =
-  | 'unitPrice'
-  | 'materials'
-  | 'labor'
-  | 'otherVarCost'
-  | 'fixedTotal'
-  | 'desiredProfit'
-  | 'stage1Summary'
-  | 'fixedItemName'
-  | 'fixedItemAmount'
-  | 'varItemName'
-  | 'varItemAmount'
-  | 'stage2Summary'
-  | 'channelName'
-  | 'channelPct'
-  | 'stage3Summary'
-  | 'marketingPct'
-  | 'stage4Summary'
-  | 'phase0Reminder';
-
-function finStageNumber(step: FinStepId): number {
-  if (
-    step === 'unitPrice' ||
-    step === 'materials' ||
-    step === 'labor' ||
-    step === 'otherVarCost' ||
-    step === 'fixedTotal' ||
-    step === 'desiredProfit' ||
-    step === 'stage1Summary'
-  ) {
-    return 1;
-  }
-  if (
-    step === 'fixedItemName' ||
-    step === 'fixedItemAmount' ||
-    step === 'varItemName' ||
-    step === 'varItemAmount' ||
-    step === 'stage2Summary'
-  ) {
-    return 2;
-  }
-  if (step === 'channelName' || step === 'channelPct' || step === 'stage3Summary') {
-    return 3;
-  }
-  return 4;
-}
-
-function finStepQuestion(
-  step: FinStepId,
-  locale: 'es' | 'en',
-  ctx: { fixedCount: number; varCount: number; channelCount: number; pendingName: string }
-): string {
-  if (locale === 'en') {
-    switch (step) {
-      case 'unitPrice':
-        return '### Stage 1: Your product or service\n\nHow much do you sell ONE unit of your product or service for? (example: $500)';
-      case 'materials':
-        return '### Materials\n\nTo deliver that one unit, how much do you spend on materials or supplies? You can answer in money (example: $150) or as a percentage of your price (example: 30%).';
-      case 'labor':
-        return '### Labor\n\nHow much do you spend on staff or labor for that same unit? (in money or in %)';
-      case 'otherVarCost':
-        return '### Other costs\n\nHow much do you spend on other variable costs per unit — packaging, commissions, shipping, etc.? (in money or in %)';
-      case 'fixedTotal':
-        return '### Fixed costs\n\nWhat are your total monthly fixed costs? (rent, payroll, software, etc. — just the total for now)';
-      case 'desiredProfit':
-        return '### Profit goal\n\nWhat monthly profit would you like to achieve?';
-      case 'fixedItemName':
-        return ctx.fixedCount === 0
-          ? '### Stage 2: Break down your fixed costs\n\nLet\'s list them one by one. What\'s the name of your first fixed cost? (example: Rent). Or type "done" if you\'d rather skip this.'
-          : 'Name of fixed cost #' + String(ctx.fixedCount + 1) + '? Or type "done" if you are finished.';
-      case 'fixedItemAmount':
-        return 'How much do you spend monthly on "' + ctx.pendingName + '"?';
-      case 'varItemName':
-        return ctx.varCount === 0
-          ? '### Extra variable costs (optional)\n\nWant to add another variable cost besides materials, labor and other? Type its name, or "done" to move on.'
-          : 'Name of another variable cost? Or type "done" to move on.';
-      case 'varItemAmount':
-        return 'How much for "' + ctx.pendingName + '"? (in money or in %)';
-      case 'channelName':
-        return ctx.channelCount === 0
-          ? '### Stage 3: Your revenue channels\n\nName your first sales channel (example: Physical store, Online sales, Marketplace).'
-          : 'Name of another channel? Or type "done" if you already have at least one.';
-      case 'channelPct':
-        return 'What % of your total revenue comes from "' + ctx.pendingName + '"? (example: 60)';
-      case 'marketingPct':
-        return '### Stage 4: Marketing investment\n\nWhat % of your revenue do you plan to invest in advertising and marketing?';
-      default:
-        return '';
-    }
-  }
-  switch (step) {
-    case 'unitPrice':
-      return '### Etapa 1: Tu producto o servicio\n\nEn cuanto vendes UNA unidad de tu producto o servicio? (ejemplo: $500)';
-    case 'materials':
-      return '### Materiales\n\nPara entregar esa unidad, cuanto gastas en materiales o insumos? Puedes responder en pesos (ejemplo: $150) o en porcentaje de tu precio (ejemplo: 30%).';
-    case 'labor':
-      return '### Personal\n\nCuanto gastas en personal o mano de obra para esa misma unidad? (en pesos o en %)';
-    case 'otherVarCost':
-      return '### Otros costos\n\nCuanto gastas en otros costos variables por unidad — empaque, comision, envio, etc.? (en pesos o en %)';
-    case 'fixedTotal':
-      return '### Gastos fijos\n\nCuales son tus gastos fijos mensuales totales? (renta, nomina, software, etc. — solo el total por ahora)';
-    case 'desiredProfit':
-      return '### Meta de utilidad\n\nQue utilidad mensual te gustaria lograr?';
-    case 'fixedItemName':
-      return ctx.fixedCount === 0
-        ? '### Etapa 2: Desglosa tus gastos fijos\n\nVamos a listarlos uno por uno. Como se llama tu primer gasto fijo? (ejemplo: Renta). O escribe "listo" si prefieres omitir esto.'
-        : 'Nombre del gasto fijo #' + String(ctx.fixedCount + 1) + '? O escribe "listo" si ya terminaste.';
-    case 'fixedItemAmount':
-      return 'Cuanto gastas al mes en "' + ctx.pendingName + '"?';
-    case 'varItemName':
-      return ctx.varCount === 0
-        ? '### Costos variables adicionales (opcional)\n\nQuieres agregar algun otro costo variable ademas de materiales, personal y otros? Escribe su nombre, o "listo" para continuar.'
-        : 'Nombre de otro costo variable? O escribe "listo" para continuar.';
-    case 'varItemAmount':
-      return 'Cuanto es "' + ctx.pendingName + '"? (en pesos o en %)';
-    case 'channelName':
-      return ctx.channelCount === 0
-        ? '### Etapa 3: Tus canales de ingreso\n\nEscribe el nombre de tu primer canal de venta (ejemplo: Tienda fisica, Ventas en linea, Marketplace).'
-        : 'Nombre de otro canal? O escribe "listo" si ya tienes al menos uno.';
-    case 'channelPct':
-      return 'Que % de tus ingresos totales viene de "' + ctx.pendingName + '"? (ejemplo: 60)';
-    case 'marketingPct':
-      return '### Etapa 4: Inversion en mercadotecnia\n\nQue % de tus ingresos piensas invertir en publicidad o mercadotecnia?';
-    default:
-      return '';
-  }
-}
-
 export default function BabelPage() {
   const locale = useLocale() as 'es' | 'en';
   const t = useTranslations('babel');
   const router = useRouter();
-
   const [uid, setUid] = React.useState<string | null>(null);
   const [session, setSession] = React.useState<SessionDoc | null>(null);
   const [input, setInput] = React.useState('');
@@ -240,45 +66,39 @@ export default function BabelPage() {
   const retryRef = React.useRef<(() => Promise<void>) | null>(null);
   const [editingMessageIndex, setEditingMessageIndex] = React.useState<number | null>(null);
   const [editContent, setEditContent] = React.useState('');
-
   const [chatExpanded, setChatExpanded] = React.useState<Set<number>>(new Set());
   const [compiling, setCompiling] = React.useState(false);
   const [showManualEditor, setShowManualEditor] = React.useState(false);
   const [manualContent, setManualContent] = React.useState('');
-
   // Estado para el flujo de preguntas una por una
   const [currentQuestionIndex, setCurrentQuestionIndex] = React.useState(0);
   const [phase0Answers, setPhase0Answers] = React.useState<Record<string, string>>({});
   const [isPhase0Complete, setIsPhase0Complete] = React.useState(false);
-
-  // Estado del mini-asistente de Objetivos Financieros (Fase 4.5) — flujo en
-  // 4 etapas: (1) estimado rapido, (2) desglose de gastos, (3) canales de
-  // ingreso, (4) validacion con mercadotecnia.
+  // Estado del mini-asistente de Objetivos Financieros (Fase 4.5) — ahora es
+  // un formulario editable de 4 etapas (no chat de texto libre). Cada campo
+  // es un input numerico independiente: ya no es posible concatenar varios
+  // numeros por accidente. El resumen se recalcula en cada cambio.
   const [finActive, setFinActive] = React.useState(false);
-  const [finStep, setFinStep] = React.useState<FinStepId>('unitPrice');
-  const [finInput, setFinInput] = React.useState('');
+  const [finStage, setFinStage] = React.useState(1);
+  const [finReviewing, setFinReviewing] = React.useState(false);
   const [finSending, setFinSending] = React.useState(false);
   const [finError, setFinError] = React.useState<string | null>(null);
-
   const [finUnitPrice, setFinUnitPrice] = React.useState(0);
-  const [finMaterialsPct, setFinMaterialsPct] = React.useState(0);
-  const [finLaborPct, setFinLaborPct] = React.useState(0);
-  const [finOtherPct, setFinOtherPct] = React.useState(0);
+  const [finMaterialsValue, setFinMaterialsValue] = React.useState(0);
+  const [finMaterialsMode, setFinMaterialsMode] = React.useState<'$' | '%'>('$');
+  const [finLaborValue, setFinLaborValue] = React.useState(0);
+  const [finLaborMode, setFinLaborMode] = React.useState<'$' | '%'>('$');
+  const [finOtherValue, setFinOtherValue] = React.useState(0);
+  const [finOtherMode, setFinOtherMode] = React.useState<'$' | '%'>('$');
   const [finFixedTotalInput, setFinFixedTotalInput] = React.useState(0);
   const [finDesiredProfit, setFinDesiredProfit] = React.useState(0);
-
   const [finFixedItems, setFinFixedItems] = React.useState<{ name: string; amount: number }[]>([]);
-  const [finVarItems, setFinVarItems] = React.useState<{ name: string; pct: number }[]>([]);
+  const [finVarItems, setFinVarItems] = React.useState<{ name: string; value: number; mode: '$' | '%' }[]>([]);
   const [finChannels, setFinChannels] = React.useState<{ name: string; pct: number }[]>([]);
-  const [finPendingName, setFinPendingName] = React.useState('');
-
   const [finMarketingPct, setFinMarketingPct] = React.useState(0);
-  const [finResult, setFinResult] = React.useState<FinancialGoalsResult | null>(null);
   const [finDone, setFinDone] = React.useState(false);
-
   const bottomRef = React.useRef<HTMLDivElement>(null);
   const questions = PHASE_0_QUESTIONS[locale];
-
   // 1. Autenticacion y carga de sesion
   React.useEffect(() => {
     const auth = getFirebaseAuth();
@@ -293,12 +113,10 @@ export default function BabelPage() {
     });
     return unsubscribe;
   }, [locale, router]);
-
   // 2. Auto-scroll al fondo del chat
   React.useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [session?.messages.length]);
-
   // 3. Inyectar la primera pregunta automaticamente al iniciar
   React.useEffect(() => {
     if (!session || isPhase0Complete) return;
@@ -312,7 +130,6 @@ export default function BabelPage() {
       setSession(prev => prev ? { ...prev, messages: [questionMsg] } : prev);
     }
   }, [session, currentQuestionIndex, isPhase0Complete, questions]);
-
   const currentPhase = session?.currentPhase ?? 0;
   const allPhasesDone = currentPhase >= BABEL_IMPLEMENTED_PHASES;
   const lastMessage = session?.messages[session.messages.length - 1];
@@ -321,7 +138,6 @@ export default function BabelPage() {
     !!lastMessage &&
     lastMessage.role === 'assistant' &&
     lastMessage.content.includes(babelApprovalMarker(locale));
-
   const phaseTemplate = function (phase: number): string {
     if (phase <= 0) return '';
     const templates: Record<number, string> = {
@@ -333,21 +149,18 @@ export default function BabelPage() {
     };
     return templates[phase] ?? '### Escribe aqui tu analisis para esta fase...';
   };
-
   function friendlyError(raw: string): string {
     if (raw.includes('image.png')) {
       return 'Error de formato al contactar la IA. Revisa que las API keys en Vercel sean validas (Groq, OpenRouter, Gemini). Detalle: ' + raw.slice(0, 300);
     }
     return raw;
   }
-
   // Si la sesion ya tiene fases aprobadas desde Firestore, salir del wizard
   React.useEffect(() => {
     if (session && (session.currentPhase ?? 0) > 0) {
       setIsPhase0Complete(true);
     }
   }, [session]);
-
   // 4. Manejar respuesta en Fase 0 (Pregunta por pregunta)
   async function handlePhase0Answer() {
     if (!input.trim() || !uid || !session) return;
@@ -355,28 +168,23 @@ export default function BabelPage() {
     setInput('');
     setSending(true);
     setError(null);
-
     const userMsg: ChatMessage = {
       role: 'user',
       content: answer,
       timestamp: Timestamp.now(),
     };
-
     try {
       const updatedAnswers = { ...phase0Answers, [questions[currentQuestionIndex].key]: answer };
       setPhase0Answers(updatedAnswers);
-
       if (currentQuestionIndex === questions.length - 1) {
         // ULTIMA PREGUNTA: generar conclusion local (sin API)
         const phase0Labels: Record<string, string> = locale === 'en'
           ? { giro: 'Business Type', ubicacion: 'Location', madurez: 'Maturity', recursos: 'Resources', ambicion: 'Ambition', mision_vision: 'Mission & Vision', utilidad_deseada: 'Desired Monthly Profit', sueldo_founder: 'Founder Salary', gastos_fijos: 'Fixed Costs', gastos_variables: 'Variable Costs' }
           : { giro: 'Giro y nicho', ubicacion: 'Ubicación', madurez: 'Madurez', recursos: 'Recursos', ambicion: 'Ambición', mision_vision: 'Misión y Visión', utilidad_deseada: 'Utilidad mensual deseada', sueldo_founder: 'Sueldo del fundador', gastos_fijos: 'Gastos fijos', gastos_variables: 'Gastos variables' };
-
         const conclusionLines = Object.entries(updatedAnswers).map(function (entry) {
           return '**' + (phase0Labels[entry[0]] ?? entry[0]) + ':** ' + entry[1];
         });
         const conclusionBody = '### Resumen de Fase 0 — Calibración Inicial\n\n' + conclusionLines.join('\n\n---\n\n') + '\n\n---\n\n*¿Apruebas este resumen de la Fase 0 para continuar a la Fase 1?*';
-
         const summaryMsg: ChatMessage = {
           role: 'user',
           content: 'Fase 0 completada:\n\n' + conclusionLines.join('\n\n'),
@@ -387,7 +195,6 @@ export default function BabelPage() {
           content: conclusionBody,
           timestamp: Timestamp.now(),
         };
-
         const cleanMessages: ChatMessage[] = [summaryMsg, assistantMsg];
         setSession(function (prev) { return prev ? { ...prev, messages: cleanMessages } : prev; });
         await saveBabelMessages(uid, cleanMessages);
@@ -396,17 +203,14 @@ export default function BabelPage() {
         // PREGUNTAS INTERMEDIAS: solo estado local, NO a Firestore
         const updatedMessages = [...session.messages, userMsg];
         setSession(function (prev) { return prev ? { ...prev, messages: updatedMessages } : prev; });
-
         const nextIndex = currentQuestionIndex + 1;
         setCurrentQuestionIndex(nextIndex);
-
         const nextQuestion = questions[nextIndex];
         const nextQuestionMsg: ChatMessage = {
           role: 'assistant',
           content: nextQuestion.question,
           timestamp: Timestamp.now(),
         };
-
         const messagesWithNextQuestion = [...updatedMessages, nextQuestionMsg];
         setSession(function (prev) { return prev ? { ...prev, messages: messagesWithNextQuestion } : prev; });
       }
@@ -463,14 +267,12 @@ export default function BabelPage() {
       setSending(false);
     }
   }
-
   // 5. Manejar mensajes de chat normal (Fases 1-5)
   async function sendMessage(text: string) {
     if (!uid || !session || !text.trim()) return;
     setSending(true);
     setError(null);
     retryRef.current = null;
-
     const userMsg: ChatMessage = {
       role: 'user',
       content: text.trim(),
@@ -480,14 +282,12 @@ export default function BabelPage() {
     setSession({ ...session, messages: historyForApi });
     const sentText = text.trim();
     setInput('');
-
     // Guardar payload para reintentar
     const payload = {
       messages: historyForApi.map(function (m) { return { role: m.role, content: m.content }; }),
       language: locale,
       phase: currentPhase,
     };
-
     try {
       const res = await fetch('/api/babel', {
         method: 'POST',
@@ -496,9 +296,7 @@ export default function BabelPage() {
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Error generico');
-
       retryRef.current = null;
-
       const assistantMsg: ChatMessage = {
         role: 'assistant',
         content: data.reply as string,
@@ -543,7 +341,6 @@ export default function BabelPage() {
       setSending(false);
     }
   }
-
   async function handleApprove(editedText?: string) {
     if (!uid || !session || !lastMessage) return;
     setSending(true);
@@ -553,7 +350,6 @@ export default function BabelPage() {
     try {
       await approveBabelPhase(uid, currentPhase, approvedContent, locale);
       const refreshed = await getOrCreateBabelSession(uid, locale);
-
       if ((refreshed.currentPhase ?? 0) >= BABEL_IMPLEMENTED_PHASES) {
         setSession(refreshed);
         setSending(false);
@@ -562,14 +358,12 @@ export default function BabelPage() {
         setCompiling(false);
         return;
       }
-
       const approvalMsg: ChatMessage = {
         role: 'user',
         content: locale === 'en' ? "I approve, let's continue." : 'Apruebo, continuemos.',
         timestamp: Timestamp.now(),
       };
       const historyForApi = [...refreshed.messages, approvalMsg];
-
       const res = await fetch('/api/babel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -584,7 +378,6 @@ export default function BabelPage() {
         console.error('[babel] API error response completa:', JSON.stringify(data, null, 2));
         throw new Error(data.error || 'Error generico');
       }
-
       const assistantMsg: ChatMessage = {
         role: 'assistant',
         content: data.reply as string,
@@ -606,17 +399,14 @@ export default function BabelPage() {
       setSending(false);
     }
   }
-
   function handleStartEdit(index: number, content: string) {
     setEditingMessageIndex(index);
     setEditContent(content);
   }
-
   function handleCancelEdit() {
     setEditingMessageIndex(null);
     setEditContent('');
   }
-
   async function handleSaveEdit() {
     if (!uid || !session || editingMessageIndex === null) return;
     setError(null);
@@ -640,7 +430,6 @@ export default function BabelPage() {
       setError(err instanceof Error ? err.message : 'Error al guardar');
     }
   }
-
   async function manualApprovePhase(phase: number, text: string) {
     if (!uid || !session) return;
     setSending(true);
@@ -669,14 +458,12 @@ export default function BabelPage() {
       setSending(false);
     }
   }
-
   async function upsertCompiledPlan(overrideMessages?: ChatMessage[], overridePhases?: BabelPhaseRecord[]) {
     if (!uid || !session) return;
     try {
       const phases = overridePhases ?? session.phases ?? [];
       const compiled = phases.length > 0 ? [...phases].sort((a, b) => a.phase - b.phase).map((p) => p.summary).join('\n\n---\n\n') : '';
       const compiledText = compiled ? '### Plan Estrategico Compilado\n\n' + compiled : 'No hay fases aprobadas para compilar aun.';
-
       const baseMessages = overrideMessages ?? session.messages;
       let existingIdx = -1;
       for (let j = baseMessages.length - 1; j >= 0; j--) {
@@ -685,7 +472,6 @@ export default function BabelPage() {
           break;
         }
       }
-
       if (compiled) {
         try {
           downloadCompiledPlanPdf({ sessionTopic: session.topic, compiledText: compiled, language: locale });
@@ -693,7 +479,6 @@ export default function BabelPage() {
           console.error('[babel] No se pudo generar el PDF del plan compilado', pdfErr);
         }
       }
-
       let finalMessages: ChatMessage[];
       if (existingIdx >= 0) {
         finalMessages = baseMessages.map(function (m, i) {
@@ -703,7 +488,6 @@ export default function BabelPage() {
         const assistantMsg: ChatMessage = { role: 'assistant', content: compiledText, timestamp: Timestamp.now() };
         finalMessages = [...baseMessages, assistantMsg];
       }
-
       setSession(function (prev) { return prev ? { ...prev, messages: finalMessages } : prev; });
       setInput('');
     } catch (err) {
@@ -711,7 +495,6 @@ export default function BabelPage() {
       throw err;
     }
   }
-
   async function handleCompile() {
     if (!uid || !session || compiling) return;
     setCompiling(true);
@@ -724,209 +507,176 @@ export default function BabelPage() {
       setCompiling(false);
     }
   }
-
   function handleStartFinancialGoals() {
     setFinActive(true);
-    setFinStep('unitPrice');
-    setFinInput('');
+    setFinStage(1);
+    setFinReviewing(false);
+    setFinSending(false);
     setFinError(null);
     setFinUnitPrice(0);
-    setFinMaterialsPct(0);
-    setFinLaborPct(0);
-    setFinOtherPct(0);
+    setFinMaterialsValue(0);
+    setFinMaterialsMode('$');
+    setFinLaborValue(0);
+    setFinLaborMode('$');
+    setFinOtherValue(0);
+    setFinOtherMode('$');
     setFinFixedTotalInput(0);
     setFinDesiredProfit(0);
     setFinFixedItems([]);
     setFinVarItems([]);
     setFinChannels([]);
-    setFinPendingName('');
     setFinMarketingPct(0);
-    setFinResult(null);
     setFinDone(false);
   }
-
   function handleCloseFinancialGoals() {
     setFinActive(false);
-    setFinStep('unitPrice');
-    setFinInput('');
+    setFinStage(1);
+    setFinReviewing(false);
+    setFinSending(false);
     setFinError(null);
     setFinUnitPrice(0);
-    setFinMaterialsPct(0);
-    setFinLaborPct(0);
-    setFinOtherPct(0);
+    setFinMaterialsValue(0);
+    setFinMaterialsMode('$');
+    setFinLaborValue(0);
+    setFinLaborMode('$');
+    setFinOtherValue(0);
+    setFinOtherMode('$');
     setFinFixedTotalInput(0);
     setFinDesiredProfit(0);
     setFinFixedItems([]);
     setFinVarItems([]);
     setFinChannels([]);
-    setFinPendingName('');
     setFinMarketingPct(0);
-    setFinResult(null);
     setFinDone(false);
   }
-
-  async function handleFinAnswer() {
-    if (!finInput.trim()) return;
-    const value = finInput.trim();
-    setFinInput('');
+  function addFixedItem() {
+    setFinFixedItems(function (prev) { return [...prev, { name: '', amount: 0 }]; });
+  }
+  function updateFixedItem(index: number, patch: Partial<{ name: string; amount: number }>) {
+    setFinFixedItems(function (prev) { return prev.map(function (item, i) { return i === index ? { ...item, ...patch } : item; }); });
+  }
+  function removeFixedItem(index: number) {
+    setFinFixedItems(function (prev) { return prev.filter(function (_, i) { return i !== index; }); });
+  }
+  function addVarItem() {
+    setFinVarItems(function (prev) { return [...prev, { name: '', value: 0, mode: '$' as '$' | '%' }]; });
+  }
+  function updateVarItem(index: number, patch: Partial<{ name: string; value: number; mode: '$' | '%' }>) {
+    setFinVarItems(function (prev) { return prev.map(function (item, i) { return i === index ? { ...item, ...patch } : item; }); });
+  }
+  function removeVarItem(index: number) {
+    setFinVarItems(function (prev) { return prev.filter(function (_, i) { return i !== index; }); });
+  }
+  function addChannel() {
+    setFinChannels(function (prev) { return [...prev, { name: '', pct: 0 }]; });
+  }
+  function updateChannel(index: number, patch: Partial<{ name: string; pct: number }>) {
+    setFinChannels(function (prev) { return prev.map(function (item, i) { return i === index ? { ...item, ...patch } : item; }); });
+  }
+  function removeChannel(index: number) {
+    setFinChannels(function (prev) { return prev.filter(function (_, i) { return i !== index; }); });
+  }
+  function handleFinNext() {
     setFinError(null);
-
-    switch (finStep) {
-      case 'unitPrice': {
-        setFinUnitPrice(parseNumberLoose(value));
-        setFinStep('materials');
-        break;
+    if (finStage === 1) {
+      if (finUnitPrice <= 0) {
+        setFinError(locale === 'en' ? 'Enter a sale price greater than zero.' : 'Ingresa un precio de venta mayor a cero.');
+        return;
       }
-      case 'materials': {
-        setFinMaterialsPct(parseAmountOrPercent(value, finUnitPrice));
-        setFinStep('labor');
-        break;
+      const baseVarPct =
+        toAmountPct(finMaterialsValue, finMaterialsMode, finUnitPrice) +
+        toAmountPct(finLaborValue, finLaborMode, finUnitPrice) +
+        toAmountPct(finOtherValue, finOtherMode, finUnitPrice);
+      if (baseVarPct >= 1) {
+        setFinError(
+          locale === 'en'
+            ? 'Your variable costs already add up to 100% or more of your sale price. Adjust the numbers before continuing.'
+            : 'Tus costos variables ya suman 100% o más de tu precio de venta. Ajusta los montos antes de continuar.'
+        );
+        return;
       }
-      case 'labor': {
-        setFinLaborPct(parseAmountOrPercent(value, finUnitPrice));
-        setFinStep('otherVarCost');
-        break;
+      setFinStage(2);
+      return;
+    }
+    if (finStage === 2) {
+      const baseVarPct =
+        toAmountPct(finMaterialsValue, finMaterialsMode, finUnitPrice) +
+        toAmountPct(finLaborValue, finLaborMode, finUnitPrice) +
+        toAmountPct(finOtherValue, finOtherMode, finUnitPrice);
+      const extraVarPct = finVarItems.reduce(function (s, v) { return s + toAmountPct(v.value, v.mode, finUnitPrice); }, 0);
+      if (baseVarPct + extraVarPct >= 1) {
+        setFinError(
+          locale === 'en'
+            ? 'Adding your extra variable costs pushes the total to 100% or more of your price. Adjust the numbers before continuing.'
+            : 'Al sumar tus costos variables adicionales, el total llega a 100% o más de tu precio. Ajusta los montos antes de continuar.'
+        );
+        return;
       }
-      case 'otherVarCost': {
-        setFinOtherPct(parseAmountOrPercent(value, finUnitPrice));
-        setFinStep('fixedTotal');
-        break;
+      setFinStage(3);
+      return;
+    }
+    if (finStage === 3) {
+      if (finChannels.length === 0) {
+        setFinError(
+          locale === 'en'
+            ? 'Add at least one revenue channel before continuing.'
+            : 'Agrega al menos un canal de ingreso antes de continuar.'
+        );
+        return;
       }
-      case 'fixedTotal': {
-        setFinFixedTotalInput(parseNumberLoose(value));
-        setFinStep('desiredProfit');
-        break;
+      const sum = finChannels.reduce(function (s, c) { return s + c.pct; }, 0);
+      if (sum <= 0) {
+        setFinError(
+          locale === 'en'
+            ? 'Enter a percentage greater than zero for at least one channel.'
+            : 'Ingresa un porcentaje mayor a cero en al menos un canal.'
+        );
+        return;
       }
-      case 'desiredProfit': {
-        setFinDesiredProfit(parseNumberLoose(value));
-        setFinStep('stage1Summary');
-        break;
-      }
-      case 'fixedItemName': {
-        if (isDoneWord(value)) {
-          setFinStep('varItemName');
-          break;
-        }
-        setFinPendingName(value);
-        setFinStep('fixedItemAmount');
-        break;
-      }
-      case 'fixedItemAmount': {
-        const amount = parseNumberLoose(value);
-        setFinFixedItems(function (prev) { return [...prev, { name: finPendingName, amount: amount }]; });
-        setFinPendingName('');
-        setFinStep('fixedItemName');
-        break;
-      }
-      case 'varItemName': {
-        if (isDoneWord(value)) {
-          setFinStep('stage2Summary');
-          break;
-        }
-        setFinPendingName(value);
-        setFinStep('varItemAmount');
-        break;
-      }
-      case 'varItemAmount': {
-        const pct = parseAmountOrPercent(value, finUnitPrice);
-        setFinVarItems(function (prev) { return [...prev, { name: finPendingName, pct: pct }]; });
-        setFinPendingName('');
-        setFinStep('varItemName');
-        break;
-      }
-      case 'channelName': {
-        if (isDoneWord(value)) {
-          if (finChannels.length === 0) {
-            setFinError(
-              locale === 'en'
-                ? 'Please add at least one channel before continuing.'
-                : 'Agrega al menos un canal antes de continuar.'
-            );
-            setFinStep('channelName');
-            break;
-          }
-          setFinStep('stage3Summary');
-          break;
-        }
-        setFinPendingName(value);
-        setFinStep('channelPct');
-        break;
-      }
-      case 'channelPct': {
-        const pct = parsePercentLoose(value);
-        setFinChannels(function (prev) { return [...prev, { name: finPendingName, pct: pct }]; });
-        setFinPendingName('');
-        setFinStep('channelName');
-        break;
-      }
-      case 'marketingPct': {
-        const pct = parsePercentLoose(value);
-        setFinMarketingPct(pct);
-
-        const pctSum = finChannels.reduce(function (s, c) { return s + c.pct; }, 0);
-        const normalizedChannels =
-          pctSum > 0
-            ? finChannels.map(function (c) { return { name: c.name, pct: c.pct / pctSum }; })
-            : finChannels;
-
-        const goalsInput: FinancialGoalsInput = {
-          language: locale,
-          unitPrice: finUnitPrice,
-          materialsPct: finMaterialsPct,
-          laborPct: finLaborPct,
-          otherVarPct: finOtherPct,
-          fixedItems: finFixedItems,
-          fixedTotalFallback: finFixedTotalInput,
-          varItems: finVarItems,
-          desiredProfit: finDesiredProfit,
-          channels: normalizedChannels,
-          marketingPct: pct,
-        };
-        const computed = computeFinancialGoals(goalsInput);
-        setFinResult(computed);
-        setFinStep('stage4Summary');
-        break;
-      }
-      default:
-        break;
+      setFinStage(4);
+      return;
+    }
+    if (finStage === 4) {
+      setFinReviewing(true);
     }
   }
-
-  function handleFinContinue() {
+  function handleFinBack() {
     setFinError(null);
-    if (finStep === 'stage1Summary') {
-      setFinStep('fixedItemName');
-    } else if (finStep === 'stage2Summary') {
-      setFinStep('channelName');
-    } else if (finStep === 'stage3Summary') {
-      setFinStep('marketingPct');
-    } else if (finStep === 'stage4Summary') {
-      setFinStep('phase0Reminder');
+    if (finReviewing) {
+      setFinReviewing(false);
+      return;
+    }
+    if (finStage > 1) {
+      setFinStage(finStage - 1);
     }
   }
-
   function handleFinGenerate() {
     setFinSending(true);
     setFinError(null);
     try {
-      const pctSum = finChannels.reduce(function (s, c) { return s + c.pct; }, 0);
+      const materialsPct = toAmountPct(finMaterialsValue, finMaterialsMode, finUnitPrice);
+      const laborPct = toAmountPct(finLaborValue, finLaborMode, finUnitPrice);
+      const otherVarPct = toAmountPct(finOtherValue, finOtherMode, finUnitPrice);
+      const varItemsForExcel = finVarItems.map(function (v) {
+        return { name: v.name, pct: toAmountPct(v.value, v.mode, finUnitPrice) };
+      });
+      const channelPctSum = finChannels.reduce(function (s, c) { return s + c.pct; }, 0);
       const normalizedChannels =
-        pctSum > 0
-          ? finChannels.map(function (c) { return { name: c.name, pct: c.pct / pctSum }; })
-          : finChannels;
-
+        channelPctSum > 0
+          ? finChannels.map(function (c) { return { name: c.name, pct: c.pct / channelPctSum }; })
+          : finChannels.map(function (c) { return { name: c.name, pct: 0 }; });
       const goalsInput: FinancialGoalsInput = {
         language: locale,
         unitPrice: finUnitPrice,
-        materialsPct: finMaterialsPct,
-        laborPct: finLaborPct,
-        otherVarPct: finOtherPct,
+        materialsPct: materialsPct,
+        laborPct: laborPct,
+        otherVarPct: otherVarPct,
         fixedItems: finFixedItems,
         fixedTotalFallback: finFixedTotalInput,
-        varItems: finVarItems,
+        varItems: varItemsForExcel,
         desiredProfit: finDesiredProfit,
         channels: normalizedChannels,
-        marketingPct: finMarketingPct,
+        marketingPct: finMarketingPct / 100,
       };
       downloadFinancialGoalsExcel(goalsInput);
       setFinDone(true);
@@ -936,13 +686,11 @@ export default function BabelPage() {
       setFinSending(false);
     }
   }
-
   async function handleLogout() {
     const auth = getFirebaseAuth();
     await signOut(auth);
     router.push('/' + locale);
   }
-
   async function handleReset() {
     if (!uid) return;
     const confirmMsg =
@@ -965,14 +713,11 @@ export default function BabelPage() {
       setSending(false);
     }
   }
-
   if (!session) {
     return <div className="flex min-h-screen items-center justify-center text-slate-500">{t('loading')}</div>;
   }
-
   // VISTA 1: WIZARD DE FASE 0 (Pregunta por pregunta)
   const isPhase0Active = currentPhase === 0 && currentQuestionIndex < questions.length && !isPhase0Complete;
-
   if (isPhase0Active) {
     return (
       <div className="mx-auto flex min-h-screen max-w-2xl flex-col gap-4 p-4 sm:p-6">
@@ -986,7 +731,6 @@ export default function BabelPage() {
            <Button onClick={handleLogout} variant="outline" size="sm">Cerrar sesion</Button>
           </div>
         </div>
-
         {/* Historial de respuestas previas */}
         {session.messages.length > 0 && (
           <Card className="flex-1 space-y-3 overflow-y-auto p-4 max-h-[40vh]">
@@ -1027,13 +771,11 @@ export default function BabelPage() {
             })}
           </Card>
         )}
-
         {/* Barra de progreso */}
         <div className="w-full bg-slate-200 rounded-full h-2">
           <div className="bg-blue-600 h-2 rounded-full transition-all" style={{ width: String(((currentQuestionIndex + 1) / questions.length) * 100) + '%' }} />
         </div>
         <p className="text-sm text-slate-600">Pregunta {currentQuestionIndex + 1} de {questions.length}</p>
-
         {error && (
           <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600 border border-red-200">
             <div className="mb-1">{friendlyError(error)}</div>
@@ -1058,7 +800,6 @@ export default function BabelPage() {
             </div>
           </div>
         )}
-
         {showManualEditor && (
           <Card className="p-4 space-y-2">
             <p className="text-sm font-medium text-slate-700">Escribe tu conclusion de la Fase 0 manualmente:</p>
@@ -1079,13 +820,11 @@ export default function BabelPage() {
             </div>
           </Card>
         )}
-
         {/* Pregunta actual y formulario */}
         <Card className="p-6">
           <div className="whitespace-pre-wrap text-slate-900 mb-4 font-medium">
             {questions[currentQuestionIndex].question}
           </div>
-
           <form
             onSubmit={function (e) {
               e.preventDefault();
@@ -1114,38 +853,48 @@ export default function BabelPage() {
       </div>
     );
   }
-
-  // Calculos derivados para los resumenes del mini-asistente de Objetivos
-  // Financieros (solo se usan cuando finActive esta activo, pero se calculan
-  // aqui para mantener el JSX de abajo simple).
-  const finStage1TotalVarPct = finMaterialsPct + finLaborPct + finOtherPct;
-  const finStage1Denom = 1 - finStage1TotalVarPct;
-  const finStage1BreakEven = finStage1Denom > 0 ? finFixedTotalInput / finStage1Denom : 0;
-  const finStage1Target = finStage1Denom > 0 ? (finFixedTotalInput + finDesiredProfit) / finStage1Denom : 0;
-
+  // Calculos derivados en vivo para los resumenes del formulario de
+  // Objetivos Financieros. Se recalculan en cada render (cada vez que el
+  // usuario cambia un campo), sin necesidad de un boton "confirmar".
+  const finMaterialsPctLive = toAmountPct(finMaterialsValue, finMaterialsMode, finUnitPrice);
+  const finLaborPctLive = toAmountPct(finLaborValue, finLaborMode, finUnitPrice);
+  const finOtherPctLive = toAmountPct(finOtherValue, finOtherMode, finUnitPrice);
+  const finBaseVarPct = finMaterialsPctLive + finLaborPctLive + finOtherPctLive;
+  const finExtraVarPct = finVarItems.reduce(function (s, v) { return s + toAmountPct(v.value, v.mode, finUnitPrice); }, 0);
+  const finTotalVarPct = finBaseVarPct + finExtraVarPct;
+  const finStage1Invalid = finBaseVarPct >= 1;
+  const finStage1Denom = 1 - finBaseVarPct;
+  const finStage1BreakEven = finStage1Invalid ? null : finFixedTotalInput / finStage1Denom;
+  const finStage1Target = finStage1Invalid ? null : (finFixedTotalInput + finDesiredProfit) / finStage1Denom;
   const finItemizedFixedTotal =
     finFixedItems.length > 0
       ? finFixedItems.reduce(function (s, f) { return s + f.amount; }, 0)
       : finFixedTotalInput;
-  const finStage2VarItemsPct = finVarItems.reduce(function (s, v) { return s + v.pct; }, 0);
-  const finStage2TotalVarPct = finMaterialsPct + finLaborPct + finOtherPct + finStage2VarItemsPct;
-  const finStage2Denom = 1 - finStage2TotalVarPct;
-  const finStage2BreakEven = finStage2Denom > 0 ? finItemizedFixedTotal / finStage2Denom : 0;
-  const finStage2Target = finStage2Denom > 0 ? (finItemizedFixedTotal + finDesiredProfit) / finStage2Denom : 0;
-
+  const finInvalid = finTotalVarPct >= 1;
+  const finDenom = 1 - finTotalVarPct;
+  const finBreakEven = finInvalid ? null : finItemizedFixedTotal / finDenom;
+  const finTarget = finInvalid ? null : (finItemizedFixedTotal + finDesiredProfit) / finDenom;
   const finChannelPctSum = finChannels.reduce(function (s, c) { return s + c.pct; }, 0);
   const finChannelsNormalized =
     finChannelPctSum > 0
       ? finChannels.map(function (c) { return { name: c.name, pct: c.pct / finChannelPctSum }; })
-      : finChannels;
-
-  const finIsSummaryStep =
-    finStep === 'stage1Summary' ||
-    finStep === 'stage2Summary' ||
-    finStep === 'stage3Summary' ||
-    finStep === 'stage4Summary' ||
-    finStep === 'phase0Reminder';
-
+      : finChannels.map(function (c) { return { name: c.name, pct: 0 }; });
+  const finResultLive: FinancialGoalsResult | null =
+    !finInvalid && finChannels.length > 0
+      ? computeFinancialGoals({
+          language: locale,
+          unitPrice: finUnitPrice,
+          materialsPct: finMaterialsPctLive,
+          laborPct: finLaborPctLive,
+          otherVarPct: finOtherPctLive,
+          fixedItems: finFixedItems,
+          fixedTotalFallback: finFixedTotalInput,
+          varItems: finVarItems.map(function (v) { return { name: v.name, pct: toAmountPct(v.value, v.mode, finUnitPrice) }; }),
+          desiredProfit: finDesiredProfit,
+          channels: finChannelsNormalized,
+          marketingPct: finMarketingPct / 100,
+        })
+      : null;
   // VISTA 2: CHAT NORMAL (Fases 1-5 y posterior a Fase 0)
   return (
     <div className="mx-auto flex min-h-screen max-w-4xl flex-col gap-4 p-4 sm:p-6">
@@ -1159,7 +908,6 @@ export default function BabelPage() {
          <Button onClick={handleLogout} variant="outline" size="sm">Cerrar sesion</Button>
         </div>
       </div>
-
       <Card className="flex-1 space-y-3 overflow-y-auto p-4 min-h-[60vh]">
         {session.messages.map(function (m, i) {
           const isLong = m.content.length > 300;
@@ -1231,7 +979,6 @@ export default function BabelPage() {
         )}
         <div ref={bottomRef} />
       </Card>
-
         {error && (
         <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600 border border-red-200">
           <div className="mb-1">{friendlyError(error)}</div>
@@ -1256,7 +1003,6 @@ export default function BabelPage() {
           </div>
         </div>
       )}
-
       {showManualEditor && !awaitingApproval && (
         <Card className="p-4 space-y-2">
           <p className="text-sm font-medium text-slate-700">Escribe tu conclusion para la Fase {currentPhase} manualmente:</p>
@@ -1277,16 +1023,13 @@ export default function BabelPage() {
           </div>
         </Card>
       )}
-
       {/* Panel de etapas aprobadas — toggle desde link en botones de aprobación */}
-
       <div className="flex flex-col gap-2">
         {awaitingApproval && editingMessageIndex === null && !showManualEditor && (
           <Button onClick={function () { handleApprove(); }} disabled={sending}>
             {allPhasesDone ? t('approveFinalButton') : t('approveButton', { phase: currentPhase })}
           </Button>
         )}
-
         {awaitingApproval && showManualEditor && (
           <Card className="p-4 space-y-2">
             <p className="text-sm font-medium text-slate-700">Escribe tu propia conclusion para la Fase {currentPhase}:</p>
@@ -1307,7 +1050,6 @@ export default function BabelPage() {
             </div>
           </Card>
         )}
-
         {awaitingApproval && editingMessageIndex !== null && (
           <div className="flex gap-2">
             <Button onClick={handleCancelEdit} disabled={sending} variant="outline" className="flex-1">
@@ -1318,19 +1060,16 @@ export default function BabelPage() {
             </Button>
           </div>
         )}
-
         {allPhasesDone && !awaitingApproval && (
           <Button onClick={handleCompile} disabled={compiling} variant="outline" className="w-full">
             {compiling ? 'Actualizando...' : 'Actualizar plan compilado'}
           </Button>
         )}
-
         {allPhasesDone && !awaitingApproval && !finActive && (
           <Button onClick={handleStartFinancialGoals} variant="outline" className="w-full">
             {locale === 'en' ? 'Define financial goals (break-even + projection)' : 'Definir objetivos financieros (punto de equilibrio + proyección)'}
           </Button>
         )}
-
         {finActive && (
           <Card className="p-4 space-y-3">
             {finDone ? (
@@ -1345,123 +1084,317 @@ export default function BabelPage() {
             ) : (
               <>
                 <div className="w-full bg-slate-200 rounded-full h-2">
-                  <div className="bg-blue-600 h-2 rounded-full transition-all" style={{ width: String((finStageNumber(finStep) / 4) * 100) + '%' }} />
+                  <div className="bg-blue-600 h-2 rounded-full transition-all" style={{ width: String((Math.min(finStage, 4) / 4) * 100) + '%' }} />
                 </div>
                 <p className="text-xs text-slate-500">
-                  {locale === 'en' ? 'Stage' : 'Etapa'} {finStageNumber(finStep)} {locale === 'en' ? 'of 4' : 'de 4'}
+                  {locale === 'en' ? 'Stage' : 'Etapa'} {Math.min(finStage, 4)} {locale === 'en' ? 'of 4' : 'de 4'}
                 </p>
-
                 {finError && (
                   <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600 border border-red-200">
                     {finError}
                   </div>
                 )}
 
-                {finStep === 'stage1Summary' && (
-                  <div className="space-y-2 text-sm text-slate-800">
-                    <p className="font-semibold">{locale === 'en' ? 'Quick estimate' : 'Estimado rapido'}</p>
-                    <p>{locale === 'en' ? '% Variable costs' : '% Costos variables'}: {(finStage1TotalVarPct * 100).toFixed(1)}%</p>
-                    <p>{locale === 'en' ? 'Break-even point' : 'Punto de equilibrio'}: {finStage1BreakEven.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
-                    <p>{locale === 'en' ? 'Revenue needed for your profit goal' : 'Ingreso necesario para tu meta de utilidad'}: {finStage1Target.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
-                    <Button onClick={handleFinContinue} size="sm">{locale === 'en' ? 'Continue' : 'Continuar'}</Button>
+                {!finReviewing && finStage === 1 && (
+                  <div className="space-y-3 text-sm text-slate-800">
+                    <p className="font-semibold">{locale === 'en' ? 'Stage 1: Your product or service' : 'Etapa 1: Tu producto o servicio'}</p>
+                    <label className="block space-y-1">
+                      <span className="text-xs text-slate-600">{locale === 'en' ? 'Sale price per unit' : 'Precio de venta por unidad'}</span>
+                      <input
+                        type="number"
+                        value={finUnitPrice || ''}
+                        onChange={function (e) { setFinUnitPrice(Number(e.target.value)); }}
+                        placeholder="500"
+                        className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </label>
+                    <div className="space-y-1">
+                      <span className="text-xs text-slate-600">{locale === 'en' ? 'Materials cost' : 'Costo de materiales'}</span>
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          value={finMaterialsValue || ''}
+                          onChange={function (e) { setFinMaterialsValue(Number(e.target.value)); }}
+                          className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <select
+                          value={finMaterialsMode}
+                          onChange={function (e) { setFinMaterialsMode(e.target.value as '$' | '%'); }}
+                          className="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm"
+                        >
+                          <option value="$">$</option>
+                          <option value="%">%</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-xs text-slate-600">{locale === 'en' ? 'Labor cost' : 'Costo de personal'}</span>
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          value={finLaborValue || ''}
+                          onChange={function (e) { setFinLaborValue(Number(e.target.value)); }}
+                          className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <select
+                          value={finLaborMode}
+                          onChange={function (e) { setFinLaborMode(e.target.value as '$' | '%'); }}
+                          className="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm"
+                        >
+                          <option value="$">$</option>
+                          <option value="%">%</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-xs text-slate-600">{locale === 'en' ? 'Other variable costs' : 'Otros costos variables'}</span>
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          value={finOtherValue || ''}
+                          onChange={function (e) { setFinOtherValue(Number(e.target.value)); }}
+                          className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <select
+                          value={finOtherMode}
+                          onChange={function (e) { setFinOtherMode(e.target.value as '$' | '%'); }}
+                          className="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm"
+                        >
+                          <option value="$">$</option>
+                          <option value="%">%</option>
+                        </select>
+                      </div>
+                    </div>
+                    <label className="block space-y-1">
+                      <span className="text-xs text-slate-600">{locale === 'en' ? 'Total monthly fixed costs' : 'Gastos fijos mensuales totales'}</span>
+                      <input
+                        type="number"
+                        value={finFixedTotalInput || ''}
+                        onChange={function (e) { setFinFixedTotalInput(Number(e.target.value)); }}
+                        className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </label>
+                    <label className="block space-y-1">
+                      <span className="text-xs text-slate-600">{locale === 'en' ? 'Desired monthly profit' : 'Utilidad mensual deseada'}</span>
+                      <input
+                        type="number"
+                        value={finDesiredProfit || ''}
+                        onChange={function (e) { setFinDesiredProfit(Number(e.target.value)); }}
+                        className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </label>
+                    <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 space-y-1">
+                      <p>{locale === 'en' ? '% Variable costs' : '% Costos variables'}: {(finBaseVarPct * 100).toFixed(1)}%</p>
+                      {finStage1Invalid ? (
+                        <p className="text-red-600 font-medium">
+                          {locale === 'en'
+                            ? 'Your variable costs already reach 100% or more of your price. Fix the numbers above before continuing.'
+                            : 'Tus costos variables ya llegan a 100% o más de tu precio. Corrige los montos antes de continuar.'}
+                        </p>
+                      ) : (
+                        <>
+                          <p>{locale === 'en' ? 'Break-even point' : 'Punto de equilibrio'}: {finStage1BreakEven !== null ? finStage1BreakEven.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}</p>
+                          <p>{locale === 'en' ? 'Revenue needed for your profit goal' : 'Ingreso necesario para tu meta de utilidad'}: {finStage1Target !== null ? finStage1Target.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}</p>
+                        </>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button onClick={handleFinNext} size="sm">{locale === 'en' ? 'Continue' : 'Continuar'}</Button>
+                    </div>
                   </div>
                 )}
 
-                {finStep === 'stage2Summary' && (
-                  <div className="space-y-2 text-sm text-slate-800">
-                    <p className="font-semibold">{locale === 'en' ? 'Detailed expenses' : 'Gastos detallados'}</p>
-                    <p>{locale === 'en' ? 'Total fixed costs' : 'Total gastos fijos'}: {finItemizedFixedTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
-                    <p>{locale === 'en' ? '% Variable costs' : '% Costos variables'}: {(finStage2TotalVarPct * 100).toFixed(1)}%</p>
-                    <p>{locale === 'en' ? 'Break-even point' : 'Punto de equilibrio'}: {finStage2BreakEven.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
-                    <p>{locale === 'en' ? 'Revenue needed for your profit goal' : 'Ingreso necesario para tu meta de utilidad'}: {finStage2Target.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
-                    <Button onClick={handleFinContinue} size="sm">{locale === 'en' ? 'Continue' : 'Continuar'}</Button>
+                {!finReviewing && finStage === 2 && (
+                  <div className="space-y-3 text-sm text-slate-800">
+                    <p className="font-semibold">{locale === 'en' ? 'Stage 2: Break down your costs (optional)' : 'Etapa 2: Desglosa tus gastos (opcional)'}</p>
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-slate-600">{locale === 'en' ? 'Fixed costs' : 'Gastos fijos'}</p>
+                      {finFixedItems.map(function (item, i) {
+                        return (
+                          <div key={i} className="flex gap-2 items-center">
+                            <input
+                              type="text"
+                              value={item.name}
+                              onChange={function (e) { updateFixedItem(i, { name: e.target.value }); }}
+                              placeholder={locale === 'en' ? 'Name (e.g. Rent)' : 'Nombre (ej. Renta)'}
+                              className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <input
+                              type="number"
+                              value={item.amount || ''}
+                              onChange={function (e) { updateFixedItem(i, { amount: Number(e.target.value) }); }}
+                              placeholder="$"
+                              className="w-28 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <button type="button" onClick={function () { removeFixedItem(i); }} className="text-red-500 hover:text-red-700 text-sm px-2">×</button>
+                          </div>
+                        );
+                      })}
+                      <button type="button" onClick={addFixedItem} className="text-xs font-medium text-blue-600 hover:text-blue-800 underline underline-offset-2">
+                        {locale === 'en' ? '+ Add fixed cost' : '+ Agregar gasto fijo'}
+                      </button>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-slate-600">{locale === 'en' ? 'Extra variable costs (besides materials, labor, other)' : 'Costos variables adicionales (además de materiales, personal, otros)'}</p>
+                      {finVarItems.map(function (item, i) {
+                        return (
+                          <div key={i} className="flex gap-2 items-center">
+                            <input
+                              type="text"
+                              value={item.name}
+                              onChange={function (e) { updateVarItem(i, { name: e.target.value }); }}
+                              placeholder={locale === 'en' ? 'Name (e.g. Commission)' : 'Nombre (ej. Comisión)'}
+                              className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <input
+                              type="number"
+                              value={item.value || ''}
+                              onChange={function (e) { updateVarItem(i, { value: Number(e.target.value) }); }}
+                              className="w-24 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <select
+                              value={item.mode}
+                              onChange={function (e) { updateVarItem(i, { mode: e.target.value as '$' | '%' }); }}
+                              className="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm"
+                            >
+                              <option value="$">$</option>
+                              <option value="%">%</option>
+                            </select>
+                            <button type="button" onClick={function () { removeVarItem(i); }} className="text-red-500 hover:text-red-700 text-sm px-2">×</button>
+                          </div>
+                        );
+                      })}
+                      <button type="button" onClick={addVarItem} className="text-xs font-medium text-blue-600 hover:text-blue-800 underline underline-offset-2">
+                        {locale === 'en' ? '+ Add variable cost' : '+ Agregar costo variable'}
+                      </button>
+                    </div>
+                    <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 space-y-1">
+                      <p>{locale === 'en' ? 'Total fixed costs' : 'Total gastos fijos'}: {finItemizedFixedTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                      <p>{locale === 'en' ? '% Variable costs' : '% Costos variables'}: {(finTotalVarPct * 100).toFixed(1)}%</p>
+                      {finInvalid ? (
+                        <p className="text-red-600 font-medium">
+                          {locale === 'en'
+                            ? 'Adding these extra costs pushes your variable costs to 100% or more of your price. Fix the numbers before continuing.'
+                            : 'Al sumar estos costos, tus costos variables llegan a 100% o más de tu precio. Corrige los montos antes de continuar.'}
+                        </p>
+                      ) : (
+                        <>
+                          <p>{locale === 'en' ? 'Break-even point' : 'Punto de equilibrio'}: {finBreakEven !== null ? finBreakEven.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}</p>
+                          <p>{locale === 'en' ? 'Revenue needed for your profit goal' : 'Ingreso necesario para tu meta de utilidad'}: {finTarget !== null ? finTarget.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}</p>
+                        </>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button onClick={handleFinBack} variant="outline" size="sm">{locale === 'en' ? 'Back' : 'Atrás'}</Button>
+                      <Button onClick={handleFinNext} size="sm">{locale === 'en' ? 'Continue' : 'Continuar'}</Button>
+                    </div>
                   </div>
                 )}
 
-                {finStep === 'stage3Summary' && (
-                  <div className="space-y-2 text-sm text-slate-800">
-                    <p className="font-semibold">{locale === 'en' ? 'Revenue channels' : 'Canales de ingreso'}</p>
-                    {finChannelsNormalized.map(function (c, i) {
+                {!finReviewing && finStage === 3 && (
+                  <div className="space-y-3 text-sm text-slate-800">
+                    <p className="font-semibold">{locale === 'en' ? 'Stage 3: Your revenue channels' : 'Etapa 3: Tus canales de ingreso'}</p>
+                    {finChannels.map(function (c, i) {
                       return (
-                        <p key={i}>{c.name}: {(c.pct * 100).toFixed(1)}%</p>
+                        <div key={i} className="flex gap-2 items-center">
+                          <input
+                            type="text"
+                            value={c.name}
+                            onChange={function (e) { updateChannel(i, { name: e.target.value }); }}
+                            placeholder={locale === 'en' ? 'Name (e.g. Online sales)' : 'Nombre (ej. Ventas en línea)'}
+                            className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          <input
+                            type="number"
+                            value={c.pct || ''}
+                            onChange={function (e) { updateChannel(i, { pct: Number(e.target.value) }); }}
+                            placeholder="%"
+                            className="w-20 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          <button type="button" onClick={function () { removeChannel(i); }} className="text-red-500 hover:text-red-700 text-sm px-2">×</button>
+                        </div>
                       );
                     })}
-                    {Math.abs(finChannelPctSum - 1) > 0.02 && (
-                      <p className="text-xs text-slate-500">
-                        {locale === 'en'
-                          ? "Your percentages didn't add up to 100%, so we adjusted them proportionally."
-                          : 'Tus porcentajes no sumaban 100%, los ajustamos proporcionalmente.'}
-                      </p>
+                    <button type="button" onClick={addChannel} className="text-xs font-medium text-blue-600 hover:text-blue-800 underline underline-offset-2">
+                      {locale === 'en' ? '+ Add channel' : '+ Agregar canal'}
+                    </button>
+                    {finChannels.length > 0 && (
+                      <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 space-y-1">
+                        {finChannelsNormalized.map(function (c, i) {
+                          return <p key={i}>{c.name || (locale === 'en' ? '(unnamed)' : '(sin nombre)')}: {(c.pct * 100).toFixed(1)}%</p>;
+                        })}
+                        {Math.abs(finChannelPctSum - 100) > 2 && (
+                          <p className="text-xs text-slate-500">
+                            {locale === 'en'
+                              ? "Your percentages didn't add up to 100%, so we'll adjust them proportionally."
+                              : 'Tus porcentajes no suman 100%, los ajustaremos proporcionalmente.'}
+                          </p>
+                        )}
+                      </div>
                     )}
-                    <Button onClick={handleFinContinue} size="sm">{locale === 'en' ? 'Continue' : 'Continuar'}</Button>
+                    <div className="flex gap-2">
+                      <Button onClick={handleFinBack} variant="outline" size="sm">{locale === 'en' ? 'Back' : 'Atrás'}</Button>
+                      <Button onClick={handleFinNext} size="sm">{locale === 'en' ? 'Continue' : 'Continuar'}</Button>
+                    </div>
                   </div>
                 )}
 
-                {finStep === 'stage4Summary' && finResult && (
-                  <div className="space-y-2 text-sm text-slate-800">
-                    <p className="font-semibold">{locale === 'en' ? 'Marketing validation' : 'Validación con mercadotecnia'}</p>
-                    <p>{locale === 'en' ? 'Growth you can expect with that investment' : 'Crecimiento esperado con esa inversión'}: {(finResult.expectedGrowthRate * 100).toFixed(1)}% {locale === 'en' ? 'monthly' : 'mensual'}</p>
-                    <p>{locale === 'en' ? 'Growth needed to reach your goal in 12 months' : 'Crecimiento necesario para llegar a tu meta en 12 meses'}: {(finResult.requiredGrowthRate * 100).toFixed(1)}% {locale === 'en' ? 'monthly' : 'mensual'}</p>
-                    {finResult.isSufficient ? (
-                      <p className="text-green-700 font-medium">
-                        {locale === 'en' ? 'Your planned investment is enough to reach your goal.' : 'Tu inversión planeada es suficiente para llegar a tu meta.'}
-                      </p>
-                    ) : (
-                      <p className="text-amber-700 font-medium">
-                        {finResult.recommendedMarketingPct !== null
-                          ? (locale === 'en'
-                              ? 'That investment is not enough. We recommend investing at least ' + (finResult.recommendedMarketingPct * 100).toFixed(0) + '% of your revenue (about ' + (finResult.recommendedMarketingAmount ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 }) + ' at the start).'
-                              : 'Con esa inversión no alcanzas tu meta. Te recomendamos invertir al menos ' + (finResult.recommendedMarketingPct * 100).toFixed(0) + '% de tus ingresos (aproximadamente ' + (finResult.recommendedMarketingAmount ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 }) + ' al inicio).')
-                          : (locale === 'en'
-                              ? 'Even a high marketing investment would not reach this goal in 12 months. Consider a longer timeline or a lower profit goal.'
-                              : 'Ni siquiera con una inversión alta se alcanza esta meta en 12 meses. Considera un plazo más largo o una meta de utilidad menor.')}
-                      </p>
+                {!finReviewing && finStage === 4 && (
+                  <div className="space-y-3 text-sm text-slate-800">
+                    <p className="font-semibold">{locale === 'en' ? 'Stage 4: Marketing investment' : 'Etapa 4: Inversión en mercadotecnia'}</p>
+                    <label className="block space-y-1">
+                      <span className="text-xs text-slate-600">{locale === 'en' ? '% of revenue invested in marketing' : '% de ingresos invertido en mercadotecnia'}</span>
+                      <input
+                        type="number"
+                        value={finMarketingPct || ''}
+                        onChange={function (e) { setFinMarketingPct(Number(e.target.value)); }}
+                        placeholder="10"
+                        className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </label>
+                    {finResultLive && (
+                      <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 space-y-1">
+                        <p>{locale === 'en' ? 'Growth you can expect with that investment' : 'Crecimiento esperado con esa inversión'}: {(finResultLive.expectedGrowthRate * 100).toFixed(1)}% {locale === 'en' ? 'monthly' : 'mensual'}</p>
+                        <p>{locale === 'en' ? 'Growth needed to reach your goal in 12 months' : 'Crecimiento necesario para llegar a tu meta en 12 meses'}: {(finResultLive.requiredGrowthRate * 100).toFixed(1)}% {locale === 'en' ? 'monthly' : 'mensual'}</p>
+                        {finResultLive.isSufficient ? (
+                          <p className="text-green-700 font-medium">
+                            {locale === 'en' ? 'Your planned investment is enough to reach your goal.' : 'Tu inversión planeada es suficiente para llegar a tu meta.'}
+                          </p>
+                        ) : (
+                          <p className="text-amber-700 font-medium">
+                            {finResultLive.recommendedMarketingPct !== null
+                              ? (locale === 'en'
+                                  ? 'That investment is not enough. We recommend investing at least ' + (finResultLive.recommendedMarketingPct * 100).toFixed(0) + '% of your revenue (about ' + (finResultLive.recommendedMarketingAmount ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 }) + ' at the start).'
+                                  : 'Con esa inversión no alcanzas tu meta. Te recomendamos invertir al menos ' + (finResultLive.recommendedMarketingPct * 100).toFixed(0) + '% de tus ingresos (aproximadamente ' + (finResultLive.recommendedMarketingAmount ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 }) + ' al inicio).')
+                              : (locale === 'en'
+                                  ? 'Even a high marketing investment would not reach this goal in 12 months. Consider a longer timeline or a lower profit goal.'
+                                  : 'Ni siquiera con una inversión alta se alcanza esta meta en 12 meses. Considera un plazo más largo o una meta de utilidad menor.')}
+                          </p>
+                        )}
+                      </div>
                     )}
-                    <Button onClick={handleFinContinue} size="sm">{locale === 'en' ? 'Continue' : 'Continuar'}</Button>
+                    <div className="flex gap-2">
+                      <Button onClick={handleFinBack} variant="outline" size="sm">{locale === 'en' ? 'Back' : 'Atrás'}</Button>
+                      <Button onClick={handleFinNext} size="sm">{locale === 'en' ? 'Continue' : 'Continuar'}</Button>
+                    </div>
                   </div>
                 )}
 
-                {finStep === 'phase0Reminder' && (
+                {finReviewing && (
                   <div className="space-y-2 text-sm text-slate-800">
                     <p className="font-semibold">{locale === 'en' ? 'Before you download...' : 'Antes de descargar...'}</p>
                     <p>
                       {locale === 'en'
-                        ? 'Take a look back at what you answered in Phase 0 (your business type, niche, and offer) to confirm these goals still make sense for your business.'
-                        : 'Revisa lo que respondiste en la Fase 0 (tu giro, nicho y oferta) para confirmar que estas metas sigan alineadas con tu negocio.'}
+                        ? 'Take a look back at what you answered in Phase 0 (your business type, niche, and offer) to confirm these goals still make sense for your business. You can still go back and edit any field.'
+                        : 'Revisa lo que respondiste en la Fase 0 (tu giro, nicho y oferta) para confirmar que estas metas sigan alineadas con tu negocio. Todavía puedes regresar y editar cualquier campo.'}
                     </p>
-                    <Button onClick={handleFinGenerate} disabled={finSending} size="sm">
-                      {finSending ? (locale === 'en' ? 'Generating...' : 'Generando...') : (locale === 'en' ? 'Generate file' : 'Generar archivo')}
-                    </Button>
-                  </div>
-                )}
-
-                {!finIsSummaryStep && (
-                  <>
-                    <div className="whitespace-pre-wrap text-slate-900 font-medium">
-                      {finStepQuestion(finStep, locale, {
-                        fixedCount: finFixedItems.length,
-                        varCount: finVarItems.length,
-                        channelCount: finChannels.length,
-                        pendingName: finPendingName,
-                      })}
-                    </div>
-                    <form
-                      onSubmit={function (e) { e.preventDefault(); handleFinAnswer(); }}
-                      className="flex gap-2 items-end"
-                    >
-                      <textarea
-                        value={finInput}
-                        onChange={function (e) { setFinInput(e.target.value); }}
-                        rows={3}
-                        placeholder={locale === 'en' ? 'Type your answer here...' : 'Escribe tu respuesta aquí...'}
-                        disabled={finSending}
-                        className="flex-1 resize-none rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 min-h-[80px]"
-                      />
-                      <Button type="submit" disabled={finSending || !finInput.trim()} className="mb-0 h-10">
-                        {locale === 'en' ? 'Next' : 'Siguiente'}
+                    <div className="flex gap-2">
+                      <Button onClick={handleFinBack} variant="outline" size="sm">{locale === 'en' ? 'Back' : 'Atrás'}</Button>
+                      <Button onClick={handleFinGenerate} disabled={finSending} size="sm">
+                        {finSending ? (locale === 'en' ? 'Generating...' : 'Generando...') : (locale === 'en' ? 'Generate file' : 'Generar archivo')}
                       </Button>
-                    </form>
-                  </>
+                    </div>
+                  </div>
                 )}
 
                 <button
@@ -1475,7 +1408,6 @@ export default function BabelPage() {
             )}
           </Card>
         )}
-
         <form
           onSubmit={function (e) {
             e.preventDefault();
