@@ -992,6 +992,9 @@ export default function BabelPage() {
             <Button onClick={function () { router.push('/' + locale + '/babel/organigrama'); }} variant="outline" size="sm">
               {dispLang === 'en' ? 'Org Chart & Roles' : 'Organigrama y Roles'}
             </Button>
+            <Button onClick={function () { router.push('/' + locale + '/babel/plan-accion'); }} variant="outline" size="sm">
+              {dispLang === 'en' ? 'Action Plan' : 'Plan de Acción'}
+            </Button>
             <Button onClick={handleReset} disabled={sending} variant="outline" size="sm">{dispLang === 'en' ? 'Start over' : 'Empezar de nuevo'}</Button>
             <Button onClick={handleLogout} variant="outline" size="sm">{dispLang === 'en' ? 'Log out' : 'Cerrar sesión'}</Button>
           </div>
