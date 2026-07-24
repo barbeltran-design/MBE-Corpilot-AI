@@ -1,10 +1,32 @@
 'use client';
-
 import React from 'react';
-
 type OrgLang = 'es' | 'en';
 type OrgStatus = 'green' | 'yellow' | 'orange' | 'red';
-
+type ConsejeroTipo = 'permanente' | 'tema';
+type EspecialidadNegocio =
+  | 'finanzas'
+  | 'comercial_ventas'
+  | 'operaciones'
+  | 'legal'
+  | 'recursos_humanos'
+  | 'mercadotecnia'
+  | 'tecnologia'
+  | 'sustentabilidad'
+  | 'otra';
+type ConsejeroEntry = {
+  id: string;
+  nombre: string;
+  derechoVoto: boolean;
+  tipo: ConsejeroTipo;
+  temaEspecifico: string;
+  especialidad: EspecialidadNegocio;
+  especialidadOtra: string;
+};
+type BoardData = {
+  presidente: string;
+  secretario: string;
+  consejeros: ConsejeroEntry[];
+};
 type OrgRoleDef = {
   key: string;
   parent: string | null;
@@ -15,14 +37,12 @@ type OrgRoleDef = {
   respEs: string[];
   respEn: string[];
 };
-
 type OrgAssignment = {
   person: string;
   status: OrgStatus | null;
 };
-
 const STORAGE_KEY = 'babel_orgchart_v1';
-
+const BOARD_STORAGE_KEY = 'babel_orgchart_board_v1';
 const ORG_ROLES: OrgRoleDef[] = [
   {
     key: 'consejo_administrativo',
@@ -397,7 +417,6 @@ const ORG_ROLES: OrgRoleDef[] = [
     ],
   },
 ];
-
 const STATUS_OPTIONS: {
   value: OrgStatus;
   labelEs: string;
@@ -411,7 +430,17 @@ const STATUS_OPTIONS: {
   { value: 'orange', labelEs: 'Lo hace un tercero', labelEn: 'A third party does it', bg: 'bg-orange-100', text: 'text-orange-800', ring: 'ring-orange-500' },
   { value: 'red', labelEs: 'Nadie lo hace', labelEn: 'Nobody does it', bg: 'bg-red-100', text: 'text-red-800', ring: 'ring-red-500' },
 ];
-
+const ESPECIALIDAD_OPTIONS: { value: EspecialidadNegocio; labelEs: string; labelEn: string }[] = [
+  { value: 'finanzas', labelEs: 'Finanzas', labelEn: 'Finance' },
+  { value: 'comercial_ventas', labelEs: 'Comercial / Ventas', labelEn: 'Commercial / Sales' },
+  { value: 'operaciones', labelEs: 'Operaciones', labelEn: 'Operations' },
+  { value: 'legal', labelEs: 'Legal', labelEn: 'Legal' },
+  { value: 'recursos_humanos', labelEs: 'Recursos Humanos', labelEn: 'Human Resources' },
+  { value: 'mercadotecnia', labelEs: 'Mercadotecnia', labelEn: 'Marketing' },
+  { value: 'tecnologia', labelEs: 'Tecnologia', labelEn: 'Technology' },
+  { value: 'sustentabilidad', labelEs: 'Sustentabilidad / Impacto Social', labelEn: 'Sustainability / Social Impact' },
+  { value: 'otra', labelEs: 'Otra', labelEn: 'Other' },
+];
 function onDemandNote(status: OrgStatus | null, lang: OrgLang): string | null {
   if (status === 'red') {
     return lang === 'en'
@@ -430,7 +459,6 @@ function onDemandNote(status: OrgStatus | null, lang: OrgLang): string | null {
   }
   return null;
 }
-
 const T = {
   es: {
     title: 'Organigrama y Roles',
@@ -449,6 +477,27 @@ const T = {
       return 'Cubiertos: ' + g + ' \u00b7 Parciales: ' + y + ' \u00b7 Tercero: ' + o + ' \u00b7 Sin cubrir: ' + r;
     },
     savedNote: 'Los cambios se guardan automaticamente en este navegador.',
+    boardIntro:
+      'Define quien preside, quien es secretario y quienes son los consejeros. Un consejero puede tener derecho a voto o no, puede ser permanente o convocarse solo para un tema especifico.',
+    presidenteLabel: 'Presidente',
+    presidentePlaceholder: 'Nombre del presidente',
+    secretarioLabel: 'Secretario',
+    secretarioPlaceholder: 'Nombre del secretario',
+    consejerosTitle: 'Consejeros',
+    consejerosEmpty: 'Aun no has agregado consejeros.',
+    addConsejero: '+ Agregar consejero',
+    removeConsejero: 'Quitar',
+    nombreLabel: 'Nombre',
+    nombrePlaceholder: 'Nombre del consejero',
+    votoLabel: 'Derecho a voto',
+    votoYes: 'Si',
+    votoNo: 'No',
+    tipoLabel: 'Tipo de participacion',
+    tipoPermanente: 'Permanente',
+    tipoTema: 'Para un tema especifico',
+    temaPlaceholder: 'Para que tema participa',
+    especialidadLabel: 'Area de especialidad de negocio',
+    especialidadOtraPlaceholder: 'Especifica la especialidad',
   },
   en: {
     title: 'Org Chart and Roles',
@@ -467,15 +516,39 @@ const T = {
       return 'Covered: ' + g + ' \u00b7 Partial: ' + y + ' \u00b7 Third party: ' + o + ' \u00b7 Uncovered: ' + r;
     },
     savedNote: 'Changes are saved automatically in this browser.',
+    boardIntro:
+      'Define who presides, who is secretary, and who the board members are. A board member may or may not have voting rights, and may be permanent or called in only for a specific topic.',
+    presidenteLabel: 'Chair / President',
+    presidentePlaceholder: "Chair's name",
+    secretarioLabel: 'Secretary',
+    secretarioPlaceholder: "Secretary's name",
+    consejerosTitle: 'Board Members',
+    consejerosEmpty: 'You have not added any board members yet.',
+    addConsejero: '+ Add board member',
+    removeConsejero: 'Remove',
+    nombreLabel: 'Name',
+    nombrePlaceholder: "Board member's name",
+    votoLabel: 'Voting rights',
+    votoYes: 'Yes',
+    votoNo: 'No',
+    tipoLabel: 'Type of participation',
+    tipoPermanente: 'Permanent',
+    tipoTema: 'For a specific topic',
+    temaPlaceholder: 'Which topic do they participate on',
+    especialidadLabel: 'Business area of expertise',
+    especialidadOtraPlaceholder: 'Specify the area of expertise',
   },
 } as const;
-
+function generateId(): string {
+  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
 export default function OrgChartBuilder({ lang }: { lang: OrgLang }) {
   const t = T[lang];
   const [assignments, setAssignments] = React.useState<Record<string, OrgAssignment>>({});
   const [expanded, setExpanded] = React.useState<Record<string, boolean>>({});
   const [loaded, setLoaded] = React.useState(false);
-
+  const [boardData, setBoardData] = React.useState<BoardData>({ presidente: '', secretario: '', consejeros: [] });
+  const [boardLoaded, setBoardLoaded] = React.useState(false);
   React.useEffect(function () {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -490,7 +563,6 @@ export default function OrgChartBuilder({ lang }: { lang: OrgLang }) {
     }
     setLoaded(true);
   }, []);
-
   React.useEffect(
     function () {
       if (!loaded) return;
@@ -502,7 +574,35 @@ export default function OrgChartBuilder({ lang }: { lang: OrgLang }) {
     },
     [assignments, loaded]
   );
-
+  React.useEffect(function () {
+    try {
+      const raw = window.localStorage.getItem(BOARD_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          setBoardData({
+            presidente: typeof parsed.presidente === 'string' ? parsed.presidente : '',
+            secretario: typeof parsed.secretario === 'string' ? parsed.secretario : '',
+            consejeros: Array.isArray(parsed.consejeros) ? parsed.consejeros : [],
+          });
+        }
+      }
+    } catch {
+      // ignore corrupt storage
+    }
+    setBoardLoaded(true);
+  }, []);
+  React.useEffect(
+    function () {
+      if (!boardLoaded) return;
+      try {
+        window.localStorage.setItem(BOARD_STORAGE_KEY, JSON.stringify(boardData));
+      } catch {
+        // storage full or unavailable, ignore
+      }
+    },
+    [boardData, boardLoaded]
+  );
   function updatePerson(key: string, person: string) {
     setAssignments(function (prev) {
       const next = { ...prev };
@@ -510,7 +610,6 @@ export default function OrgChartBuilder({ lang }: { lang: OrgLang }) {
       return next;
     });
   }
-
   function updateStatus(key: string, status: OrgStatus) {
     setAssignments(function (prev) {
       const next = { ...prev };
@@ -519,7 +618,6 @@ export default function OrgChartBuilder({ lang }: { lang: OrgLang }) {
       return next;
     });
   }
-
   function toggleExpanded(key: string) {
     setExpanded(function (prev) {
       const next = { ...prev };
@@ -527,34 +625,75 @@ export default function OrgChartBuilder({ lang }: { lang: OrgLang }) {
       return next;
     });
   }
-
+  function updatePresidente(value: string) {
+    setBoardData(function (prev) {
+      return { ...prev, presidente: value };
+    });
+  }
+  function updateSecretario(value: string) {
+    setBoardData(function (prev) {
+      return { ...prev, secretario: value };
+    });
+  }
+  function addConsejero() {
+    setBoardData(function (prev) {
+      const nuevo: ConsejeroEntry = {
+        id: generateId(),
+        nombre: '',
+        derechoVoto: true,
+        tipo: 'permanente',
+        temaEspecifico: '',
+        especialidad: 'finanzas',
+        especialidadOtra: '',
+      };
+      return { ...prev, consejeros: [...prev.consejeros, nuevo] };
+    });
+  }
+  function updateConsejero(id: string, patch: Partial<ConsejeroEntry>) {
+    setBoardData(function (prev) {
+      return {
+        ...prev,
+        consejeros: prev.consejeros.map(function (c) {
+          return c.id === id ? { ...c, ...patch } : c;
+        }),
+      };
+    });
+  }
+  function removeConsejero(id: string) {
+    setBoardData(function (prev) {
+      return {
+        ...prev,
+        consejeros: prev.consejeros.filter(function (c) {
+          return c.id !== id;
+        }),
+      };
+    });
+  }
   const topLevel = ORG_ROLES.filter(function (r) {
     return r.parent === null;
   });
-
   function childrenOf(parentKey: string): OrgRoleDef[] {
     return ORG_ROLES.filter(function (r) {
       return r.parent === parentKey;
     });
   }
-
   const counts = { green: 0, yellow: 0, orange: 0, red: 0 };
   ORG_ROLES.forEach(function (r) {
+    if (r.key === 'consejo_administrativo') return;
     const st = assignments[r.key] ? assignments[r.key].status : null;
     if (st) counts[st] += 1;
   });
-
   const candidates = ORG_ROLES.filter(function (r) {
+    if (r.key === 'consejo_administrativo') return false;
     const st = assignments[r.key] ? assignments[r.key].status : null;
     return st === 'red' || st === 'orange' || st === 'yellow';
   });
-
   function renderRoleCard(role: OrgRoleDef, depth: number) {
+    const isBoard = role.key === 'consejo_administrativo';
     const a = assignments[role.key] || { person: '', status: null };
     const isExpanded = !!expanded[role.key];
-    const note = onDemandNote(a.status, lang);
+    const note = isBoard ? null : onDemandNote(a.status, lang);
     const kids = childrenOf(role.key);
-
     return (
       <div key={role.key} style={{ marginLeft: depth * 20 }} className="mb-3">
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -575,7 +714,6 @@ export default function OrgChartBuilder({ lang }: { lang: OrgLang }) {
               {isExpanded ? t.hideResp : t.showResp}
             </button>
           </div>
-
           {isExpanded ? (
             <ul className="mt-2 list-disc pl-5 text-sm text-slate-600">
               {(lang === 'en' ? role.respEn : role.respEs).map(function (line, i) {
@@ -583,51 +721,229 @@ export default function OrgChartBuilder({ lang }: { lang: OrgLang }) {
               })}
             </ul>
           ) : null}
-
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">{t.personLabel}</label>
-              <input
-                type="text"
-                value={a.person}
-                onChange={function (e) {
-                  updatePerson(role.key, e.target.value);
-                }}
-                placeholder={t.personPlaceholder}
-                className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">{t.statusLabel}</label>
-              <div className="flex flex-wrap gap-1.5">
-                {STATUS_OPTIONS.map(function (opt) {
-                  const active = a.status === opt.value;
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={function () {
-                        updateStatus(role.key, opt.value);
-                      }}
-                      className={
-                        'rounded-full px-2.5 py-1 text-xs font-medium ' +
-                        opt.bg +
-                        ' ' +
-                        opt.text +
-                        (active ? ' ring-2 ' + opt.ring : ' opacity-60')
-                      }
-                    >
-                      {lang === 'en' ? opt.labelEn : opt.labelEs}
-                    </button>
-                  );
-                })}
+          {isBoard ? (
+            <div className="mt-3 space-y-4">
+              <p className="rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-800">{t.boardIntro}</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500">{t.presidenteLabel}</label>
+                  <input
+                    type="text"
+                    value={boardData.presidente}
+                    onChange={function (e) {
+                      updatePresidente(e.target.value);
+                    }}
+                    placeholder={t.presidentePlaceholder}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500">{t.secretarioLabel}</label>
+                  <input
+                    type="text"
+                    value={boardData.secretario}
+                    onChange={function (e) {
+                      updateSecretario(e.target.value);
+                    }}
+                    placeholder={t.secretarioPlaceholder}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+                  />
+                </div>
+              </div>
+              <div>
+                <h5 className="mb-2 text-sm font-semibold text-slate-700">{t.consejerosTitle}</h5>
+                {boardData.consejeros.length === 0 ? (
+                  <p className="text-sm text-slate-500">{t.consejerosEmpty}</p>
+                ) : (
+                  <div className="space-y-3">
+                    {boardData.consejeros.map(function (c) {
+                      return (
+                        <div key={c.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="grid flex-1 gap-2 sm:grid-cols-2">
+                              <div>
+                                <label className="mb-1 block text-xs font-medium text-slate-500">{t.nombreLabel}</label>
+                                <input
+                                  type="text"
+                                  value={c.nombre}
+                                  onChange={function (e) {
+                                    updateConsejero(c.id, { nombre: e.target.value });
+                                  }}
+                                  placeholder={t.nombrePlaceholder}
+                                  className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+                                />
+                              </div>
+                              <div>
+                                <label className="mb-1 block text-xs font-medium text-slate-500">{t.especialidadLabel}</label>
+                                <select
+                                  value={c.especialidad}
+                                  onChange={function (e) {
+                                    updateConsejero(c.id, { especialidad: e.target.value as EspecialidadNegocio });
+                                  }}
+                                  className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+                                >
+                                  {ESPECIALIDAD_OPTIONS.map(function (opt) {
+                                    return (
+                                      <option key={opt.value} value={opt.value}>
+                                        {lang === 'en' ? opt.labelEn : opt.labelEs}
+                                      </option>
+                                    );
+                                  })}
+                                </select>
+                                {c.especialidad === 'otra' ? (
+                                  <input
+                                    type="text"
+                                    value={c.especialidadOtra}
+                                    onChange={function (e) {
+                                      updateConsejero(c.id, { especialidadOtra: e.target.value });
+                                    }}
+                                    placeholder={t.especialidadOtraPlaceholder}
+                                    className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+                                  />
+                                ) : null}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={function () {
+                                removeConsejero(c.id);
+                              }}
+                              className="text-xs font-medium text-red-600 hover:underline"
+                            >
+                              {t.removeConsejero}
+                            </button>
+                          </div>
+                          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                            <div>
+                              <label className="mb-1 block text-xs font-medium text-slate-500">{t.votoLabel}</label>
+                              <div className="flex gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={function () {
+                                    updateConsejero(c.id, { derechoVoto: true });
+                                  }}
+                                  className={
+                                    'rounded-full px-2.5 py-1 text-xs font-medium ' +
+                                    (c.derechoVoto ? 'bg-green-100 text-green-800 ring-2 ring-green-500' : 'bg-slate-100 text-slate-600')
+                                  }
+                                >
+                                  {t.votoYes}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={function () {
+                                    updateConsejero(c.id, { derechoVoto: false });
+                                  }}
+                                  className={
+                                    'rounded-full px-2.5 py-1 text-xs font-medium ' +
+                                    (!c.derechoVoto ? 'bg-red-100 text-red-800 ring-2 ring-red-500' : 'bg-slate-100 text-slate-600')
+                                  }
+                                >
+                                  {t.votoNo}
+                                </button>
+                              </div>
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-xs font-medium text-slate-500">{t.tipoLabel}</label>
+                              <div className="flex flex-wrap gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={function () {
+                                    updateConsejero(c.id, { tipo: 'permanente' });
+                                  }}
+                                  className={
+                                    'rounded-full px-2.5 py-1 text-xs font-medium ' +
+                                    (c.tipo === 'permanente' ? 'bg-blue-100 text-blue-800 ring-2 ring-blue-500' : 'bg-slate-100 text-slate-600')
+                                  }
+                                >
+                                  {t.tipoPermanente}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={function () {
+                                    updateConsejero(c.id, { tipo: 'tema' });
+                                  }}
+                                  className={
+                                    'rounded-full px-2.5 py-1 text-xs font-medium ' +
+                                    (c.tipo === 'tema' ? 'bg-blue-100 text-blue-800 ring-2 ring-blue-500' : 'bg-slate-100 text-slate-600')
+                                  }
+                                >
+                                  {t.tipoTema}
+                                </button>
+                              </div>
+                              {c.tipo === 'tema' ? (
+                                <input
+                                  type="text"
+                                  value={c.temaEspecifico}
+                                  onChange={function (e) {
+                                    updateConsejero(c.id, { temaEspecifico: e.target.value });
+                                  }}
+                                  placeholder={t.temaPlaceholder}
+                                  className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+                                />
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={addConsejero}
+                  className="mt-2 text-xs font-medium text-blue-600 hover:underline"
+                >
+                  {t.addConsejero}
+                </button>
               </div>
             </div>
-          </div>
-
-          {note ? <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">{note}</p> : null}
+          ) : (
+            <>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500">{t.personLabel}</label>
+                  <input
+                    type="text"
+                    value={a.person}
+                    onChange={function (e) {
+                      updatePerson(role.key, e.target.value);
+                    }}
+                    placeholder={t.personPlaceholder}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500">{t.statusLabel}</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {STATUS_OPTIONS.map(function (opt) {
+                      const active = a.status === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={function () {
+                            updateStatus(role.key, opt.value);
+                          }}
+                          className={
+                            'rounded-full px-2.5 py-1 text-xs font-medium ' +
+                            opt.bg +
+                            ' ' +
+                            opt.text +
+                            (active ? ' ring-2 ' + opt.ring : ' opacity-60')
+                          }
+                        >
+                          {lang === 'en' ? opt.labelEn : opt.labelEs}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+              {note ? <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">{note}</p> : null}
+            </>
+          )}
         </div>
-
         {kids.length > 0
           ? kids.map(function (kid) {
               return renderRoleCard(kid, depth + 1);
@@ -636,14 +952,11 @@ export default function OrgChartBuilder({ lang }: { lang: OrgLang }) {
       </div>
     );
   }
-
   return (
     <div className="mx-auto max-w-3xl">
       <h3 className="text-xl font-bold text-slate-800">{t.title}</h3>
       <p className="mt-1 text-sm text-slate-500">{t.subtitle}</p>
-
       <p className="mt-3 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-800">{t.repeatNote}</p>
-
       <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <h4 className="mb-2 text-sm font-semibold text-slate-700">{t.summaryTitle}</h4>
         <p className="mb-2 text-xs text-slate-400">
@@ -666,13 +979,11 @@ export default function OrgChartBuilder({ lang }: { lang: OrgLang }) {
           </ul>
         )}
       </div>
-
       <div className="mt-6">
         {topLevel.map(function (role) {
           return renderRoleCard(role, 0);
         })}
       </div>
-
       <p className="mt-4 text-xs text-slate-400">{t.savedNote}</p>
     </div>
   );
