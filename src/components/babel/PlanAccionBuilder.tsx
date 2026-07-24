@@ -119,7 +119,6 @@ const ESTATUS_OPTIONS: { value: Estatus; labelEs: string; labelEn: string }[] = 
   { value: 'terminado', labelEs: 'Terminado', labelEn: 'Done' },
 ];
 
-// Tabla de prioridad aprobada y corregida: de mas (1) a menos (16) prioritaria.
 const PRIORITY_ORDER: [Factibilidad, Impacto][] = [
   ['alta', 'alto'],
   ['media', 'alto'],
@@ -140,9 +139,13 @@ const PRIORITY_ORDER: [Factibilidad, Impacto][] = [
 ];
 
 function priorityRank(factibilidad: Factibilidad, impacto: Impacto): number {
-  const idx = PRIORITY_ORDER.findIndex(function (pair) {
-    return pair[0] === factibilidad && pair[1] === impacto;
-  });
+  let idx = -1;
+  for (let i = 0; i < PRIORITY_ORDER.length; i++) {
+    if (PRIORITY_ORDER[i][0] === factibilidad && PRIORITY_ORDER[i][1] === impacto) {
+      idx = i;
+      break;
+    }
+  }
   return idx === -1 ? 16 : idx + 1;
 }
 
@@ -174,11 +177,15 @@ function generateId(): string {
 }
 
 function roleLabel(roleKey: string, lang: PlanLang): string {
-  const r = ROLE_OPTIONS.find(function (opt) {
-    return opt.key === roleKey;
-  });
-  if (!r) return '';
-  return lang === 'en' ? r.nameEn : r.nameEs;
+  let found: RoleOption | null = null;
+  for (let i = 0; i < ROLE_OPTIONS.length; i++) {
+    if (ROLE_OPTIONS[i].key === roleKey) {
+      found = ROLE_OPTIONS[i];
+      break;
+    }
+  }
+  if (!found) return '';
+  return lang === 'en' ? found.nameEn : found.nameEs;
 }
 
 function whatsappLink(celular: string, mensaje: string): string {
@@ -195,54 +202,61 @@ function daysUntil(fecha: string): number {
   return Math.round(diffMs / (1000 * 60 * 60 * 24));
 }
 
-const T = {
+function reminderMessage(lang: PlanLang, nombre: string, tarea: string, proyecto: string, fecha: string, entregable: string): string {
+  const entregableTxt = entregable ? entregable : (lang === 'en' ? 'not set' : 'sin definir');
+  if (lang === 'en') {
+    return 'Hi ' + nombre + ', your task "' + tarea + '" for project "' + proyecto + '" is due ' + fecha + '. Expected deliverable: ' + entregableTxt + '. Please confirm your progress.';
+  }
+  return 'Hola ' + nombre + ', tu tarea "' + tarea + '" del proyecto "' + proyecto + '" tiene fecha compromiso ' + fecha + '. Entregable esperado: ' + entregableTxt + '. Por favor confirma como vas.';
+}
+
+const LABELS = {
   es: {
     title: 'Plan de Accion Estrategico',
-    subtitle:
-      'Por cada objetivo de negocio, registra las amenazas u oportunidades del entorno, tus fortalezas o debilidades frente a ellas, el proyecto que las atiende y las acciones concretas para lograrlo.',
+    subtitle: 'Por cada objetivo de negocio, registra las amenazas u oportunidades del entorno, tus fortalezas o debilidades frente a ellas, el proyecto que las atiende y las acciones concretas para lograrlo.',
     contactsTitle: 'Directorio de Contactos',
     contactsSubtitle: 'Nombre y celular de cada responsable, para poder enviar recordatorios por WhatsApp.',
-    addContact: '+ Agregar contacto',
+    addContact: 'Agregar contacto',
     contactName: 'Nombre',
     contactPhone: 'Celular (con codigo de pais, ej. 52...)',
-    summaryTitle: 'Resumen',
     summaryObjetivos: 'Objetivos',
     summaryAcciones: 'Acciones totales',
     summaryVencidas: 'Acciones vencidas',
     summaryPorVencer: 'Por vencer en 7 dias',
     summaryValidar: 'Elementos pendientes de validar',
-    addObjetivo: '+ Agregar objetivo de negocio',
+    addObjetivo: 'Agregar objetivo de negocio',
     perspectivaLabel: 'Perspectiva (Balanced Scorecard)',
     objetivoLabel: 'Objetivo de negocio',
     objetivoPlaceholder: 'Ej. Incrementar utilidad a 10% anual',
-    validar: 'Validar',
     validado: 'Validado',
     pendienteValidar: 'Pendiente de validar',
     eliminar: 'Eliminar',
-    addEntorno: '+ Agregar amenaza u oportunidad',
+    mostrar: 'Mostrar',
+    ocultar: 'Ocultar',
+    addEntorno: 'Agregar amenaza u oportunidad',
     entornoTipo: 'Tipo',
     amenaza: 'Amenaza',
     oportunidad: 'Oportunidad',
     entornoDesc: 'Descripcion (que detectamos en el entorno)',
     entornoPlaceholder: 'Ej. Inflacion en insumos importados',
-    addFD: '+ Agregar fortaleza o debilidad',
+    addFD: 'Agregar fortaleza o debilidad',
     fortaleza: 'Fortaleza',
     debilidad: 'Debilidad',
     fdDesc: 'Descripcion',
     fdPlaceholder: 'Ej. Maquinaria propia con capacidad instalada',
-    definirProyecto: '+ Definir proyecto',
+    definirProyecto: 'Definir proyecto',
     proyectoLabel: 'Nombre del proyecto',
     proyectoPlaceholder: 'Ej. Automatizar inteligencia de negocio (ERP)',
     responsableLabel: 'Responsable (rol del organigrama)',
     responsableNombreLabel: 'Nombre del responsable',
-    addAccion: '+ Agregar accion',
+    addAccion: 'Agregar accion',
     accionDesc: 'Descripcion de la accion',
     accionPlaceholder: 'Ej. Cotizar 3 proveedores de ERP',
     crossLabel: 'Areas de apoyo (crossfuncional)',
     entregableLabel: 'Entregable (evidencia de que se hizo)',
-    entregablePlaceholder: 'Ej. Lista de asistencia, cotizacion firmada...',
+    entregablePlaceholder: 'Ej. Lista de asistencia, cotizacion firmada',
     inversionLabel: 'Inversion requerida',
-    inversionPlaceholder: 'Ej. $15,000 MXN o Sin costo',
+    inversionPlaceholder: 'Ej. 15000 pesos o Sin costo',
     factibilidadLabel: 'Factibilidad',
     impactoLabel: 'Impacto economico',
     prioridadLabel: 'Prioridad calculada',
@@ -250,99 +264,68 @@ const T = {
     estatusLabel: 'Estatus',
     sendReminder: 'Enviar recordatorio por WhatsApp',
     noPhone: 'Agrega el celular de esta persona en el Directorio de Contactos para poder enviar el recordatorio.',
-    reminderMsg: function (nombre: string, tarea: string, proyecto: string, fecha: string, entregable: string) {
-      return (
-        'Hola ' +
-        nombre +
-        ', tu tarea "' +
-        tarea +
-        '" del proyecto "' +
-        proyecto +
-        '" tiene fecha compromiso ' +
-        fecha +
-        '. Entregable esperado: ' +
-        (entregable || 'sin definir') +
-        '. Pf confirma como vas.'
-      );
-    },
     savedNote: 'Los cambios se guardan automaticamente en este navegador.',
     dueSoon: 'Vence pronto',
     overdue: 'Vencida',
   },
   en: {
     title: 'Strategic Action Plan',
-    subtitle:
-      'For each business objective, log the threats or opportunities in the environment, your strengths or weaknesses facing them, the project that addresses them, and the concrete actions to get it done.',
+    subtitle: 'For each business objective, log the threats or opportunities in the environment, your strengths or weaknesses facing them, the project that addresses them, and the concrete actions to get it done.',
     contactsTitle: 'Contact Directory',
     contactsSubtitle: 'Name and phone number for each owner, so reminders can be sent over WhatsApp.',
-    addContact: '+ Add contact',
+    addContact: 'Add contact',
     contactName: 'Name',
     contactPhone: 'Phone (with country code, e.g. 52...)',
-    summaryTitle: 'Summary',
     summaryObjetivos: 'Objectives',
     summaryAcciones: 'Total actions',
     summaryVencidas: 'Overdue actions',
     summaryPorVencer: 'Due within 7 days',
     summaryValidar: 'Items pending validation',
-    addObjetivo: '+ Add business objective',
+    addObjetivo: 'Add business objective',
     perspectivaLabel: 'Perspective (Balanced Scorecard)',
     objetivoLabel: 'Business objective',
     objetivoPlaceholder: 'E.g. Increase profit to 10% annually',
-    validar: 'Validate',
     validado: 'Validated',
     pendienteValidar: 'Pending validation',
     eliminar: 'Remove',
-    addEntorno: '+ Add threat or opportunity',
+    mostrar: 'Show',
+    ocultar: 'Hide',
+    addEntorno: 'Add threat or opportunity',
     entornoTipo: 'Type',
     amenaza: 'Threat',
     oportunidad: 'Opportunity',
     entornoDesc: 'Description (what we detected in the environment)',
     entornoPlaceholder: 'E.g. Inflation on imported supplies',
-    addFD: '+ Add strength or weakness',
+    addFD: 'Add strength or weakness',
     fortaleza: 'Strength',
     debilidad: 'Weakness',
     fdDesc: 'Description',
     fdPlaceholder: 'E.g. Own machinery with installed capacity',
-    definirProyecto: '+ Define project',
+    definirProyecto: 'Define project',
     proyectoLabel: 'Project name',
     proyectoPlaceholder: 'E.g. Automate business intelligence (ERP)',
     responsableLabel: 'Owner (org chart role)',
-    responsableNombreLabel: "Owner's name",
-    addAccion: '+ Add action',
+    responsableNombreLabel: 'Owner name',
+    addAccion: 'Add action',
     accionDesc: 'Action description',
     accionPlaceholder: 'E.g. Get quotes from 3 ERP vendors',
     crossLabel: 'Supporting areas (cross-functional)',
     entregableLabel: 'Deliverable (evidence the action happened)',
-    entregablePlaceholder: 'E.g. Attendance list, signed quote...',
+    entregablePlaceholder: 'E.g. Attendance list, signed quote',
     inversionLabel: 'Investment required',
-    inversionPlaceholder: 'E.g. $15,000 MXN or No cost',
+    inversionPlaceholder: 'E.g. 15000 MXN or No cost',
     factibilidadLabel: 'Feasibility',
     impactoLabel: 'Economic impact',
     prioridadLabel: 'Calculated priority',
     fechaLabel: 'Implementation date',
     estatusLabel: 'Status',
     sendReminder: 'Send WhatsApp reminder',
-    noPhone: "Add this person's phone number in the Contact Directory to send the reminder.",
-    reminderMsg: function (nombre: string, tarea: string, proyecto: string, fecha: string, entregable: string) {
-      return (
-        'Hi ' +
-        nombre +
-        ', your task "' +
-        tarea +
-        '" for project "' +
-        proyecto +
-        '" is due ' +
-        fecha +
-        '. Expected deliverable: ' +
-        (entregable || 'not set') +
-        '. Please confirm your progress.'
-      );
-    },
+    noPhone: 'Add this phone number in the Contact Directory to send the reminder.',
     savedNote: 'Changes are saved automatically in this browser.',
     dueSoon: 'Due soon',
     overdue: 'Overdue',
   },
-} as const;
+};
 
 function newAccion(rank: number): Accion {
   return {
@@ -362,14 +345,7 @@ function newAccion(rank: number): Accion {
 }
 
 function newProyecto(): Proyecto {
-  return {
-    id: generateId(),
-    nombre: '',
-    responsableRoleKey: '',
-    responsableNombre: '',
-    validado: false,
-    acciones: [],
-  };
+  return { id: generateId(), nombre: '', responsableRoleKey: '', responsableNombre: '', validado: false, acciones: [] };
 }
 
 function newFD(tipo: FDTipo): FortalezaDebilidad {
@@ -385,7 +361,7 @@ function newObjetivo(): Objetivo {
 }
 
 export default function PlanAccionBuilder({ lang }: { lang: PlanLang }) {
-  const t = T[lang];
+  const t = LABELS[lang];
   const [objetivos, setObjetivos] = React.useState<Objetivo[]>([]);
   const [contactos, setContactos] = React.useState<Contacto[]>([]);
   const [expanded, setExpanded] = React.useState<Record<string, boolean>>({});
@@ -393,15 +369,15 @@ export default function PlanAccionBuilder({ lang }: { lang: PlanLang }) {
   const [orgAssignments, setOrgAssignments] = React.useState<Record<string, { person: string }>>({});
   const [boardPresidente, setBoardPresidente] = React.useState('');
 
-  React.useEffect(function () {
+  React.useEffect(() => {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) setObjetivos(parsed);
       }
-    } catch {
-      // ignore corrupt storage
+    } catch (err) {
+      console.error(err);
     }
     try {
       const rawC = window.localStorage.getItem(CONTACTS_KEY);
@@ -409,8 +385,8 @@ export default function PlanAccionBuilder({ lang }: { lang: PlanLang }) {
         const parsedC = JSON.parse(rawC);
         if (Array.isArray(parsedC)) setContactos(parsedC);
       }
-    } catch {
-      // ignore corrupt storage
+    } catch (err) {
+      console.error(err);
     }
     try {
       const rawOrg = window.localStorage.getItem(ORG_KEY);
@@ -418,8 +394,8 @@ export default function PlanAccionBuilder({ lang }: { lang: PlanLang }) {
         const parsedOrg = JSON.parse(rawOrg);
         if (parsedOrg && typeof parsedOrg === 'object') setOrgAssignments(parsedOrg);
       }
-    } catch {
-      // ignore, org chart data is optional here
+    } catch (err) {
+      console.error(err);
     }
     try {
       const rawBoard = window.localStorage.getItem(BOARD_KEY);
@@ -427,357 +403,291 @@ export default function PlanAccionBuilder({ lang }: { lang: PlanLang }) {
         const parsedBoard = JSON.parse(rawBoard);
         if (parsedBoard && typeof parsedBoard.presidente === 'string') setBoardPresidente(parsedBoard.presidente);
       }
-    } catch {
-      // ignore, org chart data is optional here
+    } catch (err) {
+      console.error(err);
     }
     setLoaded(true);
   }, []);
 
-  React.useEffect(
-    function () {
-      if (!loaded) return;
-      try {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(objetivos));
-      } catch {
-        // storage full or unavailable, ignore
-      }
-    },
-    [objetivos, loaded]
-  );
+  React.useEffect(() => {
+    if (!loaded) return;
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(objetivos));
+    } catch (err) {
+      console.error(err);
+    }
+  }, [objetivos, loaded]);
 
-  React.useEffect(
-    function () {
-      if (!loaded) return;
-      try {
-        window.localStorage.setItem(CONTACTS_KEY, JSON.stringify(contactos));
-      } catch {
-        // storage full or unavailable, ignore
-      }
-    },
-    [contactos, loaded]
-  );
+  React.useEffect(() => {
+    if (!loaded) return;
+    try {
+      window.localStorage.setItem(CONTACTS_KEY, JSON.stringify(contactos));
+    } catch (err) {
+      console.error(err);
+    }
+  }, [contactos, loaded]);
 
-  function toggleExpanded(id: string) {
-    setExpanded(function (prev) {
-      const next = { ...prev };
+  const toggleExpanded = (id: string) => {
+    setExpanded((prev) => {
+      const next = Object.assign({}, prev);
       next[id] = !prev[id];
       return next;
     });
-  }
+  };
 
-  function resolvePersonForRole(roleKey: string): string {
+  const resolvePersonForRole = (roleKey: string): string => {
     if (!roleKey) return '';
     if (roleKey === 'consejo_administrativo') return boardPresidente;
     const a = orgAssignments[roleKey];
     return a && a.person ? a.person : '';
-  }
+  };
 
-  function resolveCelular(nombre: string): string {
+  const resolveCelular = (nombre: string): string => {
     if (!nombre) return '';
-    const found = contactos.find(function (c) {
-      return c.nombre.trim().toLowerCase() === nombre.trim().toLowerCase();
-    });
-    return found ? found.celular : '';
-  }
+    for (let i = 0; i < contactos.length; i++) {
+      if (contactos[i].nombre.trim().toLowerCase() === nombre.trim().toLowerCase()) {
+        return contactos[i].celular;
+      }
+    }
+    return '';
+  };
 
-  // ---- Contactos ----
-  function addContacto() {
-    setContactos(function (prev) {
-      return [...prev, { id: generateId(), nombre: '', celular: '' }];
-    });
-  }
-  function updateContacto(id: string, patch: Partial<Contacto>) {
-    setContactos(function (prev) {
-      return prev.map(function (c) {
-        return c.id === id ? { ...c, ...patch } : c;
-      });
-    });
-  }
-  function removeContacto(id: string) {
-    setContactos(function (prev) {
-      return prev.filter(function (c) {
-        return c.id !== id;
-      });
-    });
-  }
+  const addContacto = () => {
+    setContactos((prev) => prev.concat([{ id: generateId(), nombre: '', celular: '' }]));
+  };
+  const updateContacto = (id: string, patch: Partial<Contacto>) => {
+    setContactos((prev) => prev.map((c) => (c.id === id ? Object.assign({}, c, patch) : c)));
+  };
+  const removeContacto = (id: string) => {
+    setContactos((prev) => prev.filter((c) => c.id !== id));
+  };
 
-  // ---- Objetivos ----
-  function addObjetivo() {
-    setObjetivos(function (prev) {
-      return [...prev, newObjetivo()];
-    });
-  }
-  function updateObjetivo(id: string, patch: Partial<Objetivo>) {
-    setObjetivos(function (prev) {
-      return prev.map(function (o) {
-        return o.id === id ? { ...o, ...patch } : o;
-      });
-    });
-  }
-  function removeObjetivo(id: string) {
-    setObjetivos(function (prev) {
-      return prev.filter(function (o) {
-        return o.id !== id;
-      });
-    });
-  }
+  const addObjetivo = () => {
+    setObjetivos((prev) => prev.concat([newObjetivo()]));
+  };
+  const updateObjetivo = (id: string, patch: Partial<Objetivo>) => {
+    setObjetivos((prev) => prev.map((o) => (o.id === id ? Object.assign({}, o, patch) : o)));
+  };
+  const removeObjetivo = (id: string) => {
+    setObjetivos((prev) => prev.filter((o) => o.id !== id));
+  };
 
-  // ---- Entorno (amenaza/oportunidad) ----
-  function addEntorno(objetivoId: string, tipo: EntornoTipo) {
-    setObjetivos(function (prev) {
-      return prev.map(function (o) {
+  const addEntorno = (objetivoId: string, tipo: EntornoTipo) => {
+    setObjetivos((prev) =>
+      prev.map((o) => {
         if (o.id !== objetivoId) return o;
-        return { ...o, entorno: [...o.entorno, newEntorno(tipo)] };
-      });
-    });
-  }
-  function updateEntorno(objetivoId: string, entornoId: string, patch: Partial<AmenazaOportunidad>) {
-    setObjetivos(function (prev) {
-      return prev.map(function (o) {
+        return Object.assign({}, o, { entorno: o.entorno.concat([newEntorno(tipo)]) });
+      })
+    );
+  };
+  const updateEntorno = (objetivoId: string, entornoId: string, patch: Partial<AmenazaOportunidad>) => {
+    setObjetivos((prev) =>
+      prev.map((o) => {
         if (o.id !== objetivoId) return o;
-        return {
-          ...o,
-          entorno: o.entorno.map(function (e) {
-            return e.id === entornoId ? { ...e, ...patch } : e;
-          }),
-        };
-      });
-    });
-  }
-  function removeEntorno(objetivoId: string, entornoId: string) {
-    setObjetivos(function (prev) {
-      return prev.map(function (o) {
+        return Object.assign({}, o, {
+          entorno: o.entorno.map((e) => (e.id === entornoId ? Object.assign({}, e, patch) : e)),
+        });
+      })
+    );
+  };
+  const removeEntorno = (objetivoId: string, entornoId: string) => {
+    setObjetivos((prev) =>
+      prev.map((o) => {
         if (o.id !== objetivoId) return o;
-        return {
-          ...o,
-          entorno: o.entorno.filter(function (e) {
-            return e.id !== entornoId;
-          }),
-        };
-      });
-    });
-  }
+        return Object.assign({}, o, { entorno: o.entorno.filter((e) => e.id !== entornoId) });
+      })
+    );
+  };
 
-  // ---- Fortaleza/Debilidad ----
-  function addFD(objetivoId: string, entornoId: string, tipo: FDTipo) {
-    setObjetivos(function (prev) {
-      return prev.map(function (o) {
+  const addFD = (objetivoId: string, entornoId: string, tipo: FDTipo) => {
+    setObjetivos((prev) =>
+      prev.map((o) => {
         if (o.id !== objetivoId) return o;
-        return {
-          ...o,
-          entorno: o.entorno.map(function (e) {
+        return Object.assign({}, o, {
+          entorno: o.entorno.map((e) => {
             if (e.id !== entornoId) return e;
-            return { ...e, fd: [...e.fd, newFD(tipo)] };
+            return Object.assign({}, e, { fd: e.fd.concat([newFD(tipo)]) });
           }),
-        };
-      });
-    });
-  }
-  function updateFD(objetivoId: string, entornoId: string, fdId: string, patch: Partial<FortalezaDebilidad>) {
-    setObjetivos(function (prev) {
-      return prev.map(function (o) {
+        });
+      })
+    );
+  };
+  const updateFD = (objetivoId: string, entornoId: string, fdId: string, patch: Partial<FortalezaDebilidad>) => {
+    setObjetivos((prev) =>
+      prev.map((o) => {
         if (o.id !== objetivoId) return o;
-        return {
-          ...o,
-          entorno: o.entorno.map(function (e) {
+        return Object.assign({}, o, {
+          entorno: o.entorno.map((e) => {
             if (e.id !== entornoId) return e;
-            return {
-              ...e,
-              fd: e.fd.map(function (f) {
-                return f.id === fdId ? { ...f, ...patch } : f;
-              }),
-            };
+            return Object.assign({}, e, {
+              fd: e.fd.map((f) => (f.id === fdId ? Object.assign({}, f, patch) : f)),
+            });
           }),
-        };
-      });
-    });
-  }
-  function removeFD(objetivoId: string, entornoId: string, fdId: string) {
-    setObjetivos(function (prev) {
-      return prev.map(function (o) {
+        });
+      })
+    );
+  };
+  const removeFD = (objetivoId: string, entornoId: string, fdId: string) => {
+    setObjetivos((prev) =>
+      prev.map((o) => {
         if (o.id !== objetivoId) return o;
-        return {
-          ...o,
-          entorno: o.entorno.map(function (e) {
+        return Object.assign({}, o, {
+          entorno: o.entorno.map((e) => {
             if (e.id !== entornoId) return e;
-            return {
-              ...e,
-              fd: e.fd.filter(function (f) {
-                return f.id !== fdId;
-              }),
-            };
+            return Object.assign({}, e, { fd: e.fd.filter((f) => f.id !== fdId) });
           }),
-        };
-      });
-    });
-  }
+        });
+      })
+    );
+  };
 
-  // ---- Proyecto ----
-  function setProyecto(objetivoId: string, entornoId: string, fdId: string) {
+  const setProyecto = (objetivoId: string, entornoId: string, fdId: string) => {
     updateFD(objetivoId, entornoId, fdId, { proyecto: newProyecto() });
-  }
-  function updateProyecto(objetivoId: string, entornoId: string, fdId: string, patch: Partial<Proyecto>) {
-    setObjetivos(function (prev) {
-      return prev.map(function (o) {
+  };
+  const updateProyecto = (objetivoId: string, entornoId: string, fdId: string, patch: Partial<Proyecto>) => {
+    setObjetivos((prev) =>
+      prev.map((o) => {
         if (o.id !== objetivoId) return o;
-        return {
-          ...o,
-          entorno: o.entorno.map(function (e) {
+        return Object.assign({}, o, {
+          entorno: o.entorno.map((e) => {
             if (e.id !== entornoId) return e;
-            return {
-              ...e,
-              fd: e.fd.map(function (f) {
+            return Object.assign({}, e, {
+              fd: e.fd.map((f) => {
                 if (f.id !== fdId || !f.proyecto) return f;
-                return { ...f, proyecto: { ...f.proyecto, ...patch } };
+                return Object.assign({}, f, { proyecto: Object.assign({}, f.proyecto, patch) });
               }),
-            };
+            });
           }),
-        };
-      });
-    });
-  }
-  function removeProyecto(objetivoId: string, entornoId: string, fdId: string) {
+        });
+      })
+    );
+  };
+  const removeProyecto = (objetivoId: string, entornoId: string, fdId: string) => {
     updateFD(objetivoId, entornoId, fdId, { proyecto: null });
-  }
+  };
 
-  // ---- Acciones ----
-  function addAccion(objetivoId: string, entornoId: string, fdId: string) {
-    setObjetivos(function (prev) {
-      return prev.map(function (o) {
+  const addAccion = (objetivoId: string, entornoId: string, fdId: string) => {
+    setObjetivos((prev) =>
+      prev.map((o) => {
         if (o.id !== objetivoId) return o;
-        return {
-          ...o,
-          entorno: o.entorno.map(function (e) {
+        return Object.assign({}, o, {
+          entorno: o.entorno.map((e) => {
             if (e.id !== entornoId) return e;
-            return {
-              ...e,
-              fd: e.fd.map(function (f) {
+            return Object.assign({}, e, {
+              fd: e.fd.map((f) => {
                 if (f.id !== fdId || !f.proyecto) return f;
                 const rank = priorityRank('media', 'medio');
-                return { ...f, proyecto: { ...f.proyecto, acciones: [...f.proyecto.acciones, newAccion(rank)] } };
+                return Object.assign({}, f, {
+                  proyecto: Object.assign({}, f.proyecto, { acciones: f.proyecto.acciones.concat([newAccion(rank)]) }),
+                });
               }),
-            };
+            });
           }),
-        };
-      });
-    });
-  }
-  function updateAccion(objetivoId: string, entornoId: string, fdId: string, accionId: string, patch: Partial<Accion>) {
-    setObjetivos(function (prev) {
-      return prev.map(function (o) {
+        });
+      })
+    );
+  };
+  const updateAccion = (objetivoId: string, entornoId: string, fdId: string, accionId: string, patch: Partial<Accion>) => {
+    setObjetivos((prev) =>
+      prev.map((o) => {
         if (o.id !== objetivoId) return o;
-        return {
-          ...o,
-          entorno: o.entorno.map(function (e) {
+        return Object.assign({}, o, {
+          entorno: o.entorno.map((e) => {
             if (e.id !== entornoId) return e;
-            return {
-              ...e,
-              fd: e.fd.map(function (f) {
+            return Object.assign({}, e, {
+              fd: e.fd.map((f) => {
                 if (f.id !== fdId || !f.proyecto) return f;
-                return {
-                  ...f,
-                  proyecto: {
-                    ...f.proyecto,
-                    acciones: f.proyecto.acciones.map(function (a) {
+                return Object.assign({}, f, {
+                  proyecto: Object.assign({}, f.proyecto, {
+                    acciones: f.proyecto.acciones.map((a) => {
                       if (a.id !== accionId) return a;
-                      const merged = { ...a, ...patch };
-                      // Si cambia factibilidad o impacto y la fecha seguia siendo la sugerida anterior, la actualizamos.
-                      if ((patch.factibilidad || patch.impacto) && (!a.fecha || a.fecha === suggestedDate(priorityRank(a.factibilidad, a.impacto)))) {
+                      const merged = Object.assign({}, a, patch);
+                      const oldSuggested = suggestedDate(priorityRank(a.factibilidad, a.impacto));
+                      if ((patch.factibilidad || patch.impacto) && (!a.fecha || a.fecha === oldSuggested)) {
                         merged.fecha = suggestedDate(priorityRank(merged.factibilidad, merged.impacto));
                       }
                       return merged;
                     }),
-                  },
-                };
+                  }),
+                });
               }),
-            };
+            });
           }),
-        };
-      });
-    });
-  }
-  function removeAccion(objetivoId: string, entornoId: string, fdId: string, accionId: string) {
-    setObjetivos(function (prev) {
-      return prev.map(function (o) {
+        });
+      })
+    );
+  };
+  const removeAccion = (objetivoId: string, entornoId: string, fdId: string, accionId: string) => {
+    setObjetivos((prev) =>
+      prev.map((o) => {
         if (o.id !== objetivoId) return o;
-        return {
-          ...o,
-          entorno: o.entorno.map(function (e) {
+        return Object.assign({}, o, {
+          entorno: o.entorno.map((e) => {
             if (e.id !== entornoId) return e;
-            return {
-              ...e,
-              fd: e.fd.map(function (f) {
+            return Object.assign({}, e, {
+              fd: e.fd.map((f) => {
                 if (f.id !== fdId || !f.proyecto) return f;
-                return {
-                  ...f,
-                  proyecto: {
-                    ...f.proyecto,
-                    acciones: f.proyecto.acciones.filter(function (a) {
-                      return a.id !== accionId;
-                    }),
-                  },
-                };
+                return Object.assign({}, f, {
+                  proyecto: Object.assign({}, f.proyecto, { acciones: f.proyecto.acciones.filter((a) => a.id !== accionId) }),
+                });
               }),
-            };
+            });
           }),
-        };
-      });
-    });
-  }
+        });
+      })
+    );
+  };
 
-  // ---- Resumen ----
   const todasAcciones: Accion[] = [];
-  objetivos.forEach(function (o) {
-    o.entorno.forEach(function (e) {
-      e.fd.forEach(function (f) {
+  objetivos.forEach((o) => {
+    o.entorno.forEach((e) => {
+      e.fd.forEach((f) => {
         if (f.proyecto) {
-          f.proyecto.acciones.forEach(function (a) {
+          f.proyecto.acciones.forEach((a) => {
             todasAcciones.push(a);
           });
         }
       });
     });
   });
-  const vencidas = todasAcciones.filter(function (a) {
-    return a.estatus !== 'terminado' && daysUntil(a.fecha) < 0;
-  });
-  const porVencer = todasAcciones.filter(function (a) {
+  const vencidas = todasAcciones.filter((a) => a.estatus !== 'terminado' && daysUntil(a.fecha) < 0);
+  const porVencer = todasAcciones.filter((a) => {
     const d = daysUntil(a.fecha);
     return a.estatus !== 'terminado' && d >= 0 && d <= 7;
   });
   let pendientesValidar = 0;
-  objetivos.forEach(function (o) {
-    if (!o.validado) pendientesValidar++;
-    o.entorno.forEach(function (e) {
-      if (!e.validado) pendientesValidar++;
-      e.fd.forEach(function (f) {
-        if (!f.validado) pendientesValidar++;
+  objetivos.forEach((o) => {
+    if (!o.validado) pendientesValidar = pendientesValidar + 1;
+    o.entorno.forEach((e) => {
+      if (!e.validado) pendientesValidar = pendientesValidar + 1;
+      e.fd.forEach((f) => {
+        if (!f.validado) pendientesValidar = pendientesValidar + 1;
         if (f.proyecto) {
-          if (!f.proyecto.validado) pendientesValidar++;
-          f.proyecto.acciones.forEach(function (a) {
-            if (!a.validado) pendientesValidar++;
+          if (!f.proyecto.validado) pendientesValidar = pendientesValidar + 1;
+          f.proyecto.acciones.forEach((a) => {
+            if (!a.validado) pendientesValidar = pendientesValidar + 1;
           });
         }
       });
     });
   });
 
-  function ValidateBadge({ validado, onToggle }: { validado: boolean; onToggle: () => void }) {
+  const ValidateBadge = (props: { validado: boolean; onToggle: () => void }) => {
     return (
       <button
         type="button"
-        onClick={onToggle}
+        onClick={props.onToggle}
         className={
           'rounded-full px-2.5 py-1 text-xs font-medium ' +
-          (validado ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800')
+          (props.validado ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800')
         }
       >
-        {validado ? '\u2713 ' + t.validado : t.pendienteValidar}
+        {props.validado ? t.validado : t.pendienteValidar}
       </button>
     );
-  }
+  };
 
-  function renderAccion(objetivoId: string, entornoId: string, fdId: string, proyectoNombre: string, a: Accion) {
+  const renderAccion = (objetivoId: string, entornoId: string, fdId: string, proyectoNombre: string, a: Accion) => {
     const rank = priorityRank(a.factibilidad, a.impacto);
     const tier = priorityTier(rank, lang);
     const celular = resolveCelular(a.responsableNombre);
@@ -785,206 +695,179 @@ export default function PlanAccionBuilder({ lang }: { lang: PlanLang }) {
     const showDue = a.estatus !== 'terminado' && d <= 7;
     return (
       <div key={a.id} className="mb-3 rounded-lg border border-slate-200 bg-white p-3">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div className="grid flex-1 gap-2 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-medium text-slate-500">{t.accionDesc}</label>
-              <input
-                type="text"
-                value={a.descripcion}
-                onChange={function (e) {
-                  updateAccion(objetivoId, entornoId, fdId, a.id, { descripcion: e.target.value });
-                }}
-                placeholder={t.accionPlaceholder}
-                className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">{t.responsableLabel}</label>
-              <select
-                value={a.responsableRoleKey}
-                onChange={function (e) {
-                  const roleKey = e.target.value;
-                  const person = resolvePersonForRole(roleKey);
-                  updateAccion(objetivoId, entornoId, fdId, a.id, {
-                    responsableRoleKey: roleKey,
-                    responsableNombre: person || a.responsableNombre,
-                  });
-                }}
-                className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
-              >
-                <option value="">{'-- ' + t.responsableLabel + ' --'}</option>
-                {ROLE_OPTIONS.map(function (opt) {
-                  const person = resolvePersonForRole(opt.key);
-                  const label = roleLabel(opt.key, lang) + (person ? ' \u2014 ' + person : '');
-                  return (
-                    <option key={opt.key} value={opt.key}>
-                      {label}
-                    </option>
-                  );
-                })}
-              </select>
-              <input
-                type="text"
-                value={a.responsableNombre}
-                onChange={function (e) {
-                  updateAccion(objetivoId, entornoId, fdId, a.id, { responsableNombre: e.target.value });
-                }}
-                placeholder={t.responsableNombreLabel}
-                className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">{t.crossLabel}</label>
-              <div className="flex max-h-24 flex-wrap gap-1 overflow-y-auto rounded-lg border border-slate-200 p-1.5">
-                {ROLE_OPTIONS.map(function (opt) {
-                  const active = a.crossRoleKeys.indexOf(opt.key) !== -1;
-                  return (
-                    <button
-                      key={opt.key}
-                      type="button"
-                      onClick={function () {
-                        const next = active
-                          ? a.crossRoleKeys.filter(function (k) {
-                              return k !== opt.key;
-                            })
-                          : [...a.crossRoleKeys, opt.key];
-                        updateAccion(objetivoId, entornoId, fdId, a.id, { crossRoleKeys: next });
-                      }}
-                      className={
-                        'rounded-full px-2 py-0.5 text-[11px] font-medium ' +
-                        (active ? 'bg-indigo-100 text-indigo-800 ring-1 ring-indigo-400' : 'bg-slate-100 text-slate-600')
-                      }
-                    >
-                      {roleLabel(opt.key, lang)}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">{t.entregableLabel}</label>
-              <input
-                type="text"
-                value={a.entregable}
-                onChange={function (e) {
-                  updateAccion(objetivoId, entornoId, fdId, a.id, { entregable: e.target.value });
-                }}
-                placeholder={t.entregablePlaceholder}
-                className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">{t.inversionLabel}</label>
-              <input
-                type="text"
-                value={a.inversion}
-                onChange={function (e) {
-                  updateAccion(objetivoId, entornoId, fdId, a.id, { inversion: e.target.value });
-                }}
-                placeholder={t.inversionPlaceholder}
-                className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">{t.factibilidadLabel}</label>
-              <select
-                value={a.factibilidad}
-                onChange={function (e) {
-                  updateAccion(objetivoId, entornoId, fdId, a.id, { factibilidad: e.target.value as Factibilidad });
-                }}
-                className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
-              >
-                {FACTIBILIDAD_OPTIONS.map(function (opt) {
-                  return (
-                    <option key={opt.value} value={opt.value}>
-                      {lang === 'en' ? opt.labelEn : opt.labelEs}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">{t.impactoLabel}</label>
-              <select
-                value={a.impacto}
-                onChange={function (e) {
-                  updateAccion(objetivoId, entornoId, fdId, a.id, { impacto: e.target.value as Impacto });
-                }}
-                className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
-              >
-                {IMPACTO_OPTIONS.map(function (opt) {
-                  return (
-                    <option key={opt.value} value={opt.value}>
-                      {lang === 'en' ? opt.labelEn : opt.labelEs}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">{t.prioridadLabel}</label>
-              <span className={'inline-block rounded-full px-2.5 py-1 text-xs font-medium ' + tier.classes}>
-                #{rank} \u2014 {tier.label}
-              </span>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">{t.fechaLabel}</label>
-              <input
-                type="date"
-                value={a.fecha}
-                onChange={function (e) {
-                  updateAccion(objetivoId, entornoId, fdId, a.id, { fecha: e.target.value });
-                }}
-                className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
-              />
-              {showDue ? (
-                <span className={'mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ' + (d < 0 ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800')}>
-                  {d < 0 ? t.overdue : t.dueSoon}
-                </span>
-              ) : null}
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">{t.estatusLabel}</label>
-              <select
-                value={a.estatus}
-                onChange={function (e) {
-                  updateAccion(objetivoId, entornoId, fdId, a.id, { estatus: e.target.value as Estatus });
-                }}
-                className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
-              >
-                {ESTATUS_OPTIONS.map(function (opt) {
-                  return (
-                    <option key={opt.value} value={opt.value}>
-                      {lang === 'en' ? opt.labelEn : opt.labelEs}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-          </div>
-          <div className="flex flex-col items-end gap-2">
-            <ValidateBadge
-              validado={a.validado}
-              onToggle={function () {
-                updateAccion(objetivoId, entornoId, fdId, a.id, { validado: !a.validado });
-              }}
+        <div className="grid gap-2 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-xs font-medium text-slate-500">{t.accionDesc}</label>
+            <input
+              type="text"
+              value={a.descripcion}
+              onChange={(ev) => updateAccion(objetivoId, entornoId, fdId, a.id, { descripcion: ev.target.value })}
+              placeholder={t.accionPlaceholder}
+              className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
             />
-            <button
-              type="button"
-              onClick={function () {
-                removeAccion(objetivoId, entornoId, fdId, a.id);
-              }}
-              className="text-xs font-medium text-red-600 hover:underline"
-            >
-              {t.eliminar}
-            </button>
           </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500">{t.responsableLabel}</label>
+            <select
+              value={a.responsableRoleKey}
+              onChange={(ev) => {
+                const roleKey = ev.target.value;
+                const person = resolvePersonForRole(roleKey);
+                updateAccion(objetivoId, entornoId, fdId, a.id, {
+                  responsableRoleKey: roleKey,
+                  responsableNombre: person ? person : a.responsableNombre,
+                });
+              }}
+              className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+            >
+              <option value="">{t.responsableLabel}</option>
+              {ROLE_OPTIONS.map((opt) => {
+                const person = resolvePersonForRole(opt.key);
+                const label = roleLabel(opt.key, lang) + (person ? ' - ' + person : '');
+                return (
+                  <option key={opt.key} value={opt.key}>
+                    {label}
+                  </option>
+                );
+              })}
+            </select>
+            <input
+              type="text"
+              value={a.responsableNombre}
+              onChange={(ev) => updateAccion(objetivoId, entornoId, fdId, a.id, { responsableNombre: ev.target.value })}
+              placeholder={t.responsableNombreLabel}
+              className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500">{t.crossLabel}</label>
+            <div className="flex max-h-24 flex-wrap gap-1 overflow-y-auto rounded-lg border border-slate-200 p-1.5">
+              {ROLE_OPTIONS.map((opt) => {
+                const active = a.crossRoleKeys.indexOf(opt.key) !== -1;
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => {
+                      const next = active ? a.crossRoleKeys.filter((k) => k !== opt.key) : a.crossRoleKeys.concat([opt.key]);
+                      updateAccion(objetivoId, entornoId, fdId, a.id, { crossRoleKeys: next });
+                    }}
+                    className={
+                      'rounded-full px-2 py-0.5 text-xs font-medium ' +
+                      (active ? 'bg-indigo-100 text-indigo-800 ring-1 ring-indigo-400' : 'bg-slate-100 text-slate-600')
+                    }
+                  >
+                    {roleLabel(opt.key, lang)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500">{t.entregableLabel}</label>
+            <input
+              type="text"
+              value={a.entregable}
+              onChange={(ev) => updateAccion(objetivoId, entornoId, fdId, a.id, { entregable: ev.target.value })}
+              placeholder={t.entregablePlaceholder}
+              className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500">{t.inversionLabel}</label>
+            <input
+              type="text"
+              value={a.inversion}
+              onChange={(ev) => updateAccion(objetivoId, entornoId, fdId, a.id, { inversion: ev.target.value })}
+              placeholder={t.inversionPlaceholder}
+              className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500">{t.factibilidadLabel}</label>
+            <select
+              value={a.factibilidad}
+              onChange={(ev) => updateAccion(objetivoId, entornoId, fdId, a.id, { factibilidad: ev.target.value as Factibilidad })}
+              className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+            >
+              {FACTIBILIDAD_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {lang === 'en' ? opt.labelEn : opt.labelEs}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500">{t.impactoLabel}</label>
+            <select
+              value={a.impacto}
+              onChange={(ev) => updateAccion(objetivoId, entornoId, fdId, a.id, { impacto: ev.target.value as Impacto })}
+              className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+            >
+              {IMPACTO_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {lang === 'en' ? opt.labelEn : opt.labelEs}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500">{t.prioridadLabel}</label>
+            <span className={'inline-block rounded-full px-2.5 py-1 text-xs font-medium ' + tier.classes}>
+              {'#' + rank + ' - ' + tier.label}
+            </span>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500">{t.fechaLabel}</label>
+            <input
+              type="date"
+              value={a.fecha}
+              onChange={(ev) => updateAccion(objetivoId, entornoId, fdId, a.id, { fecha: ev.target.value })}
+              className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+            />
+            {showDue ? (
+              <span
+                className={
+                  'mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium ' +
+                  (d < 0 ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800')
+                }
+              >
+                {d < 0 ? t.overdue : t.dueSoon}
+              </span>
+            ) : null}
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500">{t.estatusLabel}</label>
+            <select
+              value={a.estatus}
+              onChange={(ev) => updateAccion(objetivoId, entornoId, fdId, a.id, { estatus: ev.target.value as Estatus })}
+              className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+            >
+              {ESTATUS_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {lang === 'en' ? opt.labelEn : opt.labelEs}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="mt-2 flex items-center justify-between">
+          <ValidateBadge
+            validado={a.validado}
+            onToggle={() => updateAccion(objetivoId, entornoId, fdId, a.id, { validado: !a.validado })}
+          />
+          <button
+            type="button"
+            onClick={() => removeAccion(objetivoId, entornoId, fdId, a.id)}
+            className="text-xs font-medium text-red-600 hover:underline"
+          >
+            {t.eliminar}
+          </button>
         </div>
         <div className="mt-2">
           {celular ? (
             
-              href={whatsappLink(celular, t.reminderMsg(a.responsableNombre, a.descripcion, proyectoNombre, a.fecha, a.entregable))}
+              href={whatsappLink(celular, reminderMessage(lang, a.responsableNombre, a.descripcion, proyectoNombre, a.fecha, a.entregable))}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-block rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
@@ -997,21 +880,19 @@ export default function PlanAccionBuilder({ lang }: { lang: PlanLang }) {
         </div>
       </div>
     );
-  }
+  };
 
-  function renderProyecto(objetivoId: string, entornoId: string, fdId: string, p: Proyecto) {
-    const isExpanded = !!expanded[p.id];
+  const renderProyecto = (objetivoId: string, entornoId: string, fdId: string, p: Proyecto) => {
+    const isExpanded = expanded[p.id] === true;
     return (
-      <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/40 p-3">
+      <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 p-3">
         <div className="grid gap-2 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-500">{t.proyectoLabel}</label>
             <input
               type="text"
               value={p.nombre}
-              onChange={function (e) {
-                updateProyecto(objetivoId, entornoId, fdId, { nombre: e.target.value });
-              }}
+              onChange={(ev) => updateProyecto(objetivoId, entornoId, fdId, { nombre: ev.target.value })}
               placeholder={t.proyectoPlaceholder}
               className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
             />
@@ -1020,20 +901,20 @@ export default function PlanAccionBuilder({ lang }: { lang: PlanLang }) {
             <label className="mb-1 block text-xs font-medium text-slate-500">{t.responsableLabel}</label>
             <select
               value={p.responsableRoleKey}
-              onChange={function (e) {
-                const roleKey = e.target.value;
+              onChange={(ev) => {
+                const roleKey = ev.target.value;
                 const person = resolvePersonForRole(roleKey);
                 updateProyecto(objetivoId, entornoId, fdId, {
                   responsableRoleKey: roleKey,
-                  responsableNombre: person || p.responsableNombre,
+                  responsableNombre: person ? person : p.responsableNombre,
                 });
               }}
               className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
             >
-              <option value="">{'-- ' + t.responsableLabel + ' --'}</option>
-              {ROLE_OPTIONS.map(function (opt) {
+              <option value="">{t.responsableLabel}</option>
+              {ROLE_OPTIONS.map((opt) => {
                 const person = resolvePersonForRole(opt.key);
-                const label = roleLabel(opt.key, lang) + (person ? ' \u2014 ' + person : '');
+                const label = roleLabel(opt.key, lang) + (person ? ' - ' + person : '');
                 return (
                   <option key={opt.key} value={opt.key}>
                     {label}
@@ -1044,27 +925,17 @@ export default function PlanAccionBuilder({ lang }: { lang: PlanLang }) {
           </div>
         </div>
         <div className="mt-2 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={function () {
-              toggleExpanded(p.id);
-            }}
-            className="text-xs font-medium text-blue-600 hover:underline"
-          >
-            {isExpanded ? '\u25b2' : '\u25bc'} {t.addAccion.replace('+ ', '')} ({p.acciones.length})
+          <button type="button" onClick={() => toggleExpanded(p.id)} className="text-xs font-medium text-blue-600 hover:underline">
+            {(isExpanded ? t.ocultar : t.mostrar) + ' ' + t.addAccion + ' (' + p.acciones.length + ')'}
           </button>
           <div className="flex items-center gap-2">
             <ValidateBadge
               validado={p.validado}
-              onToggle={function () {
-                updateProyecto(objetivoId, entornoId, fdId, { validado: !p.validado });
-              }}
+              onToggle={() => updateProyecto(objetivoId, entornoId, fdId, { validado: !p.validado })}
             />
             <button
               type="button"
-              onClick={function () {
-                removeProyecto(objetivoId, entornoId, fdId);
-              }}
+              onClick={() => removeProyecto(objetivoId, entornoId, fdId)}
               className="text-xs font-medium text-red-600 hover:underline"
             >
               {t.eliminar}
@@ -1073,14 +944,10 @@ export default function PlanAccionBuilder({ lang }: { lang: PlanLang }) {
         </div>
         {isExpanded ? (
           <div className="mt-3">
-            {p.acciones.map(function (a) {
-              return renderAccion(objetivoId, entornoId, fdId, p.nombre, a);
-            })}
+            {p.acciones.map((a) => renderAccion(objetivoId, entornoId, fdId, p.nombre, a))}
             <button
               type="button"
-              onClick={function () {
-                addAccion(objetivoId, entornoId, fdId);
-              }}
+              onClick={() => addAccion(objetivoId, entornoId, fdId)}
               className="mt-1 text-xs font-medium text-blue-600 hover:underline"
             >
               {t.addAccion}
@@ -1089,68 +956,55 @@ export default function PlanAccionBuilder({ lang }: { lang: PlanLang }) {
         ) : null}
       </div>
     );
-  }
+  };
 
-  function renderFD(objetivoId: string, entornoId: string, f: FortalezaDebilidad) {
-    const isExpanded = !!expanded[f.id];
+  const renderFD = (objetivoId: string, entornoId: string, f: FortalezaDebilidad) => {
     return (
       <div key={f.id} className="mb-3 rounded-lg border border-slate-200 bg-white p-3">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div className="grid flex-1 gap-2 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">{t.entornoTipo}</label>
-              <div className="flex gap-1.5">
-                <button
-                  type="button"
-                  onClick={function () {
-                    updateFD(objetivoId, entornoId, f.id, { tipo: 'fortaleza' });
-                  }}
-                  className={
-                    'rounded-full px-2.5 py-1 text-xs font-medium ' +
-                    (f.tipo === 'fortaleza' ? 'bg-green-100 text-green-800 ring-2 ring-green-500' : 'bg-slate-100 text-slate-600')
-                  }
-                >
-                  {t.fortaleza}
-                </button>
-                <button
-                  type="button"
-                  onClick={function () {
-                    updateFD(objetivoId, entornoId, f.id, { tipo: 'debilidad' });
-                  }}
-                  className={
-                    'rounded-full px-2.5 py-1 text-xs font-medium ' +
-                    (f.tipo === 'debilidad' ? 'bg-red-100 text-red-800 ring-2 ring-red-500' : 'bg-slate-100 text-slate-600')
-                  }
-                >
-                  {t.debilidad}
-                </button>
-              </div>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">{t.fdDesc}</label>
-              <input
-                type="text"
-                value={f.descripcion}
-                onChange={function (e) {
-                  updateFD(objetivoId, entornoId, f.id, { descripcion: e.target.value });
-                }}
-                placeholder={t.fdPlaceholder}
-                className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
-              />
+        <div className="grid gap-2 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500">{t.entornoTipo}</label>
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                onClick={() => updateFD(objetivoId, entornoId, f.id, { tipo: 'fortaleza' })}
+                className={
+                  'rounded-full px-2.5 py-1 text-xs font-medium ' +
+                  (f.tipo === 'fortaleza' ? 'bg-green-100 text-green-800 ring-2 ring-green-500' : 'bg-slate-100 text-slate-600')
+                }
+              >
+                {t.fortaleza}
+              </button>
+              <button
+                type="button"
+                onClick={() => updateFD(objetivoId, entornoId, f.id, { tipo: 'debilidad' })}
+                className={
+                  'rounded-full px-2.5 py-1 text-xs font-medium ' +
+                  (f.tipo === 'debilidad' ? 'bg-red-100 text-red-800 ring-2 ring-red-500' : 'bg-slate-100 text-slate-600')
+                }
+              >
+                {t.debilidad}
+              </button>
             </div>
           </div>
-          <div className="flex flex-col items-end gap-2">
-            <ValidateBadge
-              validado={f.validado}
-              onToggle={function () {
-                updateFD(objetivoId, entornoId, f.id, { validado: !f.validado });
-              }}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500">{t.fdDesc}</label>
+            <input
+              type="text"
+              value={f.descripcion}
+              onChange={(ev) => updateFD(objetivoId, entornoId, f.id, { descripcion: ev.target.value })}
+              placeholder={t.fdPlaceholder}
+              className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
             />
+          </div>
+        </div>
+        <div className="mt-2 flex items-center justify-between">
+          <div />
+          <div className="flex items-center gap-2">
+            <ValidateBadge validado={f.validado} onToggle={() => updateFD(objetivoId, entornoId, f.id, { validado: !f.validado })} />
             <button
               type="button"
-              onClick={function () {
-                removeFD(objetivoId, entornoId, f.id);
-              }}
+              onClick={() => removeFD(objetivoId, entornoId, f.id)}
               className="text-xs font-medium text-red-600 hover:underline"
             >
               {t.eliminar}
@@ -1162,9 +1016,7 @@ export default function PlanAccionBuilder({ lang }: { lang: PlanLang }) {
         ) : (
           <button
             type="button"
-            onClick={function () {
-              setProyecto(objetivoId, entornoId, f.id);
-            }}
+            onClick={() => setProyecto(objetivoId, entornoId, f.id)}
             className="mt-2 text-xs font-medium text-blue-600 hover:underline"
           >
             {t.definirProyecto}
@@ -1172,208 +1024,166 @@ export default function PlanAccionBuilder({ lang }: { lang: PlanLang }) {
         )}
       </div>
     );
-  }
+  };
 
-  function renderEntorno(objetivoId: string, e: AmenazaOportunidad) {
-    const isExpanded = !!expanded[e.id];
+  const renderEntorno = (objetivoId: string, e: AmenazaOportunidad) => {
+    const isExpanded = expanded[e.id] === true;
     return (
       <div key={e.id} className="mb-3 rounded-lg border border-slate-300 bg-slate-50 p-3">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div className="grid flex-1 gap-2 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">{t.entornoTipo}</label>
-              <div className="flex gap-1.5">
-                <button
-                  type="button"
-                  onClick={function () {
-                    updateEntorno(objetivoId, e.id, { tipo: 'amenaza' });
-                  }}
-                  className={
-                    'rounded-full px-2.5 py-1 text-xs font-medium ' +
-                    (e.tipo === 'amenaza' ? 'bg-red-100 text-red-800 ring-2 ring-red-500' : 'bg-slate-100 text-slate-600')
-                  }
-                >
-                  {t.amenaza}
-                </button>
-                <button
-                  type="button"
-                  onClick={function () {
-                    updateEntorno(objetivoId, e.id, { tipo: 'oportunidad' });
-                  }}
-                  className={
-                    'rounded-full px-2.5 py-1 text-xs font-medium ' +
-                    (e.tipo === 'oportunidad' ? 'bg-green-100 text-green-800 ring-2 ring-green-500' : 'bg-slate-100 text-slate-600')
-                  }
-                >
-                  {t.oportunidad}
-                </button>
-              </div>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">{t.entornoDesc}</label>
-              <input
-                type="text"
-                value={e.descripcion}
-                onChange={function (ev) {
-                  updateEntorno(objetivoId, e.id, { descripcion: ev.target.value });
-                }}
-                placeholder={t.entornoPlaceholder}
-                className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
-              />
+        <div className="grid gap-2 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500">{t.entornoTipo}</label>
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                onClick={() => updateEntorno(objetivoId, e.id, { tipo: 'amenaza' })}
+                className={
+                  'rounded-full px-2.5 py-1 text-xs font-medium ' +
+                  (e.tipo === 'amenaza' ? 'bg-red-100 text-red-800 ring-2 ring-red-500' : 'bg-slate-100 text-slate-600')
+                }
+              >
+                {t.amenaza}
+              </button>
+              <button
+                type="button"
+                onClick={() => updateEntorno(objetivoId, e.id, { tipo: 'oportunidad' })}
+                className={
+                  'rounded-full px-2.5 py-1 text-xs font-medium ' +
+                  (e.tipo === 'oportunidad' ? 'bg-green-100 text-green-800 ring-2 ring-green-500' : 'bg-slate-100 text-slate-600')
+                }
+              >
+                {t.oportunidad}
+              </button>
             </div>
           </div>
-          <div className="flex flex-col items-end gap-2">
-            <ValidateBadge
-              validado={e.validado}
-              onToggle={function () {
-                updateEntorno(objetivoId, e.id, { validado: !e.validado });
-              }}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500">{t.entornoDesc}</label>
+            <input
+              type="text"
+              value={e.descripcion}
+              onChange={(ev) => updateEntorno(objetivoId, e.id, { descripcion: ev.target.value })}
+              placeholder={t.entornoPlaceholder}
+              className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
             />
+          </div>
+        </div>
+        <div className="mt-2 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => toggleExpanded(e.id)}
+            className="text-xs font-medium text-blue-600 hover:underline"
+          >
+            {(isExpanded ? t.ocultar : t.mostrar) + ' ' + t.fortaleza + '/' + t.debilidad + ' (' + e.fd.length + ')'}
+          </button>
+          <div className="flex items-center gap-2">
+            <ValidateBadge validado={e.validado} onToggle={() => updateEntorno(objetivoId, e.id, { validado: !e.validado })} />
             <button
               type="button"
-              onClick={function () {
-                removeEntorno(objetivoId, e.id);
-              }}
+              onClick={() => removeEntorno(objetivoId, e.id)}
               className="text-xs font-medium text-red-600 hover:underline"
             >
               {t.eliminar}
             </button>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={function () {
-            toggleExpanded(e.id);
-          }}
-          className="mt-2 text-xs font-medium text-blue-600 hover:underline"
-        >
-          {isExpanded ? '\u25b2' : '\u25bc'} {t.fortaleza}/{t.debilidad} ({e.fd.length})
-        </button>
         {isExpanded ? (
           <div className="mt-3">
-            {e.fd.map(function (f) {
-              return renderFD(objetivoId, e.id, f);
-            })}
+            {e.fd.map((f) => renderFD(objetivoId, e.id, f))}
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={function () {
-                  addFD(objetivoId, e.id, 'fortaleza');
-                }}
+                onClick={() => addFD(objetivoId, e.id, 'fortaleza')}
                 className="text-xs font-medium text-blue-600 hover:underline"
               >
-                {t.addFD} ({t.fortaleza})
+                {t.addFD + ' (' + t.fortaleza + ')'}
               </button>
               <button
                 type="button"
-                onClick={function () {
-                  addFD(objetivoId, e.id, 'debilidad');
-                }}
+                onClick={() => addFD(objetivoId, e.id, 'debilidad')}
                 className="text-xs font-medium text-blue-600 hover:underline"
               >
-                {t.addFD} ({t.debilidad})
+                {t.addFD + ' (' + t.debilidad + ')'}
               </button>
             </div>
           </div>
         ) : null}
       </div>
     );
-  }
+  };
 
-  function renderObjetivo(o: Objetivo) {
-    const isExpanded = !!expanded[o.id];
+  const renderObjetivo = (o: Objetivo) => {
+    const isExpanded = expanded[o.id] === true;
     return (
       <div key={o.id} className="mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="grid flex-1 gap-2 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">{t.perspectivaLabel}</label>
-              <select
-                value={o.perspectiva}
-                onChange={function (e) {
-                  updateObjetivo(o.id, { perspectiva: e.target.value as Perspectiva });
-                }}
-                className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
-              >
-                {PERSPECTIVA_OPTIONS.map(function (opt) {
-                  return (
-                    <option key={opt.value} value={opt.value}>
-                      {lang === 'en' ? opt.labelEn : opt.labelEs}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">{t.objetivoLabel}</label>
-              <input
-                type="text"
-                value={o.texto}
-                onChange={function (e) {
-                  updateObjetivo(o.id, { texto: e.target.value });
-                }}
-                placeholder={t.objetivoPlaceholder}
-                className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
-              />
-            </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500">{t.perspectivaLabel}</label>
+            <select
+              value={o.perspectiva}
+              onChange={(ev) => updateObjetivo(o.id, { perspectiva: ev.target.value as Perspectiva })}
+              className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+            >
+              {PERSPECTIVA_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {lang === 'en' ? opt.labelEn : opt.labelEs}
+                </option>
+              ))}
+            </select>
           </div>
-          <div className="flex flex-col items-end gap-2">
-            <ValidateBadge
-              validado={o.validado}
-              onToggle={function () {
-                updateObjetivo(o.id, { validado: !o.validado });
-              }}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500">{t.objetivoLabel}</label>
+            <input
+              type="text"
+              value={o.texto}
+              onChange={(ev) => updateObjetivo(o.id, { texto: ev.target.value })}
+              placeholder={t.objetivoPlaceholder}
+              className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
             />
+          </div>
+        </div>
+        <div className="mt-2 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => toggleExpanded(o.id)}
+            className="text-xs font-medium text-blue-600 hover:underline"
+          >
+            {(isExpanded ? t.ocultar : t.mostrar) + ' ' + t.amenaza + '/' + t.oportunidad + ' (' + o.entorno.length + ')'}
+          </button>
+          <div className="flex items-center gap-2">
+            <ValidateBadge validado={o.validado} onToggle={() => updateObjetivo(o.id, { validado: !o.validado })} />
             <button
               type="button"
-              onClick={function () {
-                removeObjetivo(o.id);
-              }}
+              onClick={() => removeObjetivo(o.id)}
               className="text-xs font-medium text-red-600 hover:underline"
             >
               {t.eliminar}
             </button>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={function () {
-            toggleExpanded(o.id);
-          }}
-          className="mt-3 text-xs font-medium text-blue-600 hover:underline"
-        >
-          {isExpanded ? '\u25b2' : '\u25bc'} {t.amenaza}/{t.oportunidad} ({o.entorno.length})
-        </button>
         {isExpanded ? (
           <div className="mt-3">
-            {o.entorno.map(function (e) {
-              return renderEntorno(o.id, e);
-            })}
+            {o.entorno.map((e) => renderEntorno(o.id, e))}
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={function () {
-                  addEntorno(o.id, 'amenaza');
-                }}
+                onClick={() => addEntorno(o.id, 'amenaza')}
                 className="text-xs font-medium text-blue-600 hover:underline"
               >
-                {t.addEntorno} ({t.amenaza})
+                {t.addEntorno + ' (' + t.amenaza + ')'}
               </button>
               <button
                 type="button"
-                onClick={function () {
-                  addEntorno(o.id, 'oportunidad');
-                }}
+                onClick={() => addEntorno(o.id, 'oportunidad')}
                 className="text-xs font-medium text-blue-600 hover:underline"
               >
-                {t.addEntorno} ({t.oportunidad})
+                {t.addEntorno + ' (' + t.oportunidad + ')'}
               </button>
             </div>
           </div>
         ) : null}
       </div>
     );
-  }
+  };
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -1383,39 +1193,31 @@ export default function PlanAccionBuilder({ lang }: { lang: PlanLang }) {
       <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <h4 className="mb-1 text-sm font-semibold text-slate-700">{t.contactsTitle}</h4>
         <p className="mb-2 text-xs text-slate-400">{t.contactsSubtitle}</p>
-        {contactos.map(function (c) {
-          return (
-            <div key={c.id} className="mb-2 flex items-center gap-2">
-              <input
-                type="text"
-                value={c.nombre}
-                onChange={function (e) {
-                  updateContacto(c.id, { nombre: e.target.value });
-                }}
-                placeholder={t.contactName}
-                className="w-1/2 rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
-              />
-              <input
-                type="text"
-                value={c.celular}
-                onChange={function (e) {
-                  updateContacto(c.id, { celular: e.target.value });
-                }}
-                placeholder={t.contactPhone}
-                className="w-1/2 rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
-              />
-              <button
-                type="button"
-                onClick={function () {
-                  removeContacto(c.id);
-                }}
-                className="text-xs font-medium text-red-600 hover:underline"
-              >
-                {t.eliminar}
-              </button>
-            </div>
-          );
-        })}
+        {contactos.map((c) => (
+          <div key={c.id} className="mb-2 flex items-center gap-2">
+            <input
+              type="text"
+              value={c.nombre}
+              onChange={(ev) => updateContacto(c.id, { nombre: ev.target.value })}
+              placeholder={t.contactName}
+              className="w-1/2 rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+            />
+            <input
+              type="text"
+              value={c.celular}
+              onChange={(ev) => updateContacto(c.id, { celular: ev.target.value })}
+              placeholder={t.contactPhone}
+              className="w-1/2 rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+            />
+            <button
+              type="button"
+              onClick={() => removeContacto(c.id)}
+              className="text-xs font-medium text-red-600 hover:underline"
+            >
+              {t.eliminar}
+            </button>
+          </div>
+        ))}
         <button type="button" onClick={addContacto} className="text-xs font-medium text-blue-600 hover:underline">
           {t.addContact}
         </button>
@@ -1445,9 +1247,7 @@ export default function PlanAccionBuilder({ lang }: { lang: PlanLang }) {
       </div>
 
       <div className="mt-6">
-        {objetivos.map(function (o) {
-          return renderObjetivo(o);
-        })}
+        {objetivos.map((o) => renderObjetivo(o))}
         <button type="button" onClick={addObjetivo} className="mt-2 text-sm font-medium text-blue-600 hover:underline">
           {t.addObjetivo}
         </button>
