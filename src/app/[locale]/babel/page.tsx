@@ -49,9 +49,6 @@ const PHASE_0_QUESTIONS = {
 // Textos de interfaz que normalmente vienen de next-intl (t()), pero que
 // necesitamos poder mostrar en el idioma que el usuario elija con el
 // selector ES/EN, aunque no coincida con el idioma de la ruta (locale).
-// Cuando el idioma elegido SI coincide con la ruta, seguimos usando t()
-// (la traduccion real y probada); cuando el usuario cambia el selector,
-// usamos este respaldo.
 const UI_FALLBACK: Record<'es' | 'en', {
   title: string;
   subtitle: string;
@@ -86,26 +83,17 @@ const UI_FALLBACK: Record<'es' | 'en', {
     placeholder: 'Type your message...',
   },
 };
-// Orden fijo de las 10 preguntas de Fase 0 (las claves son las mismas en
-// ambos idiomas, solo cambia el texto que se muestra).
 const FASE0_ORDERED_KEYS = ['giro', 'ubicacion', 'madurez', 'recursos', 'ambicion', 'mision_vision', 'utilidad_deseada', 'sueldo_founder', 'gastos_fijos', 'gastos_variables'];
-// Texto de introduccion mostrado antes de la primera pregunta de Fase 0.
-// Se recalcula segun el idioma elegido (no queda "congelado").
 function fase0IntroText(lang: 'es' | 'en'): string {
   return lang === 'en'
     ? 'Hi! I\'m **Babel**, MBE Corp\'s Strategic Business Architect & Sustainability Lead.\n\nTo get started on the right foot, I\'ll ask you **10 key questions**, one at a time. Take your time.\n\n**Note:** Use Enter to add a new line. The message is only sent when you press the "Send" button.\n\n---\n\n'
     : 'Hola! Soy **Babel**, Strategic Business Architect & Sustainability Lead de MBE Corp.\n\nPara iniciar con el pie derecho, te hare **10 preguntas clave** una por una. Responde con calma.\n\n**Nota:** Usa la tecla Enter para bajar de renglon. El mensaje solo se envia cuando presionas el boton "Enviar".\n\n---\n\n';
 }
-// Etiquetas usadas en el resumen final de Fase 0, en el idioma indicado.
 function fase0LabelsFor(lang: 'es' | 'en'): Record<string, string> {
   return lang === 'en'
     ? { giro: 'Business Type', ubicacion: 'Location', madurez: 'Maturity', recursos: 'Resources', ambicion: 'Ambition', mision_vision: 'Mission & Vision', utilidad_deseada: 'Desired Monthly Profit', sueldo_founder: 'Founder Salary', gastos_fijos: 'Fixed Costs', gastos_variables: 'Variable Costs' }
     : { giro: 'Giro y nicho', ubicacion: 'Ubicación', madurez: 'Madurez', recursos: 'Recursos', ambicion: 'Ambición', mision_vision: 'Misión y Visión', utilidad_deseada: 'Utilidad mensual deseada', sueldo_founder: 'Sueldo del fundador', gastos_fijos: 'Gastos fijos', gastos_variables: 'Gastos variables' };
 }
-// Reconstruye el resumen final de Fase 0 (el que aparece dentro de la caja
-// de chat) a partir de las respuestas guardadas, en el idioma indicado.
-// Esto permite que la caja se re-traduzca en vivo al cambiar el selector,
-// en lugar de quedar fija en el idioma en que se creo originalmente.
 function buildFase0Summary(answers: Record<string, string>, lang: 'es' | 'en'): { userContent: string; assistantContent: string } {
   const labels = fase0LabelsFor(lang);
   const conclusionLines = FASE0_ORDERED_KEYS
@@ -118,10 +106,6 @@ function buildFase0Summary(answers: Record<string, string>, lang: 'es' | 'en'): 
   const assistantContent = conclusionHeader + '\n\n' + conclusionLines.join('\n\n---\n\n') + '\n\n---\n\n*' + conclusionQuestion + '*';
   return { userContent: userContent, assistantContent: assistantContent };
 }
-// Convierte un valor numerico ingresado en un campo de $ o % a una fraccion
-// (0 a 1) del precio unitario. Reemplaza los parsers de texto libre que
-// concatenaban numeros por accidente: ahora cada campo es un input numerico
-// independiente, asi que esto ya no puede pasar.
 function toAmountPct(value: number, mode: '$' | '%', unitPrice: number): number {
   if (mode === '%') return value / 100;
   return unitPrice > 0 ? value / unitPrice : 0;
@@ -142,20 +126,15 @@ export default function BabelPage() {
   const [compiling, setCompiling] = React.useState(false);
   const [showManualEditor, setShowManualEditor] = React.useState(false);
   const [manualContent, setManualContent] = React.useState('');
-  // Estado para el flujo de preguntas una por una
   const [currentQuestionIndex, setCurrentQuestionIndex] = React.useState(0);
   const [phase0Answers, setPhase0Answers] = React.useState<Record<string, string>>({});
   const [isPhase0Complete, setIsPhase0Complete] = React.useState(false);
-  // Idioma de DESPLIEGUE de toda la pagina (botones, preguntas, mensajes).
-  // Empieza igual al idioma de la ruta, pero el usuario lo puede cambiar
-  // en cualquier momento con el selector ES/EN sin perder su progreso.
-  // El idioma real del plan de negocio (lo que la IA redacta) sigue ligado
-  // a la ruta (locale) para no mezclar idiomas dentro del plan ya generado.
   const [dispLang, setDispLang] = React.useState<'es' | 'en'>(locale);
-  // Estado del mini-asistente de Objetivos Financieros (Fase 4.5) — ahora es
-  // un formulario editable de 4 etapas (no chat de texto libre). Cada campo
-  // es un input numerico independiente: ya no es posible concatenar varios
-  // numeros por accidente. El resumen se recalcula en cada cambio.
+  // Cache de traducciones (por IA) del contenido REAL de los mensajes de
+  // Babel, para cuando dispLang no coincide con el idioma en que se generaron.
+  // Clave: indice del mensaje + '::' + idioma destino.
+  const [translatedCache, setTranslatedCache] = React.useState<Record<string, string>>({});
+  const [translatingSet, setTranslatingSet] = React.useState<Set<number>>(new Set());
   const [finActive, setFinActive] = React.useState(false);
   const [finStage, setFinStage] = React.useState(1);
   const [finReviewing, setFinReviewing] = React.useState(false);
@@ -177,7 +156,6 @@ export default function BabelPage() {
   const [finDone, setFinDone] = React.useState(false);
   const bottomRef = React.useRef<HTMLDivElement>(null);
   const questions = PHASE_0_QUESTIONS[dispLang];
-  // 1. Autenticacion y carga de sesion
   React.useEffect(() => {
     const auth = getFirebaseAuth();
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -191,11 +169,9 @@ export default function BabelPage() {
     });
     return unsubscribe;
   }, [locale, router]);
-  // 2. Auto-scroll al fondo del chat
   React.useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [session?.messages.length]);
-  // 3. Inyectar la primera pregunta automaticamente al iniciar
   React.useEffect(() => {
     if (!session || isPhase0Complete) return;
     if (session.messages.length === 0 && currentQuestionIndex === 0) {
@@ -216,6 +192,51 @@ export default function BabelPage() {
     !!lastMessage &&
     lastMessage.role === 'assistant' &&
     lastMessage.content.includes(babelApprovalMarker(locale));
+  // Traduccion en vivo (por IA real, no Google Translate) del contenido que
+  // Babel ya genero, para cuando el usuario ve la pagina en un idioma
+  // distinto al de la ruta. Solo se traducen mensajes de Babel (no las
+  // respuestas propias del usuario, ni el par de resumen de Fase 0, que ya
+  // se reconstruye localmente sin IA).
+  React.useEffect(() => {
+    if (!session || dispLang === locale) return;
+    session.messages.forEach(function (m, i) {
+      if (m.role !== 'assistant') return;
+      if (currentPhase === 0 && i <= 1) return;
+      const cacheKey = i + '::' + dispLang;
+      if (translatedCache[cacheKey] !== undefined) return;
+      if (translatingSet.has(i)) return;
+      setTranslatingSet(function (prev) { const next = new Set(prev); next.add(i); return next; });
+      fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: m.content, targetLang: dispLang }),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          const translated = data && typeof data.translation === 'string' ? data.translation : m.content;
+          setTranslatedCache(function (prev) {
+            const next = { ...prev };
+            next[cacheKey] = translated;
+            return next;
+          });
+        })
+        .catch(function () {
+          setTranslatedCache(function (prev) {
+            const next = { ...prev };
+            next[cacheKey] = m.content;
+            return next;
+          });
+        })
+        .finally(function () {
+          setTranslatingSet(function (prev) {
+            const next = new Set(prev);
+            next.delete(i);
+            return next;
+          });
+        });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dispLang, session?.messages, locale, currentPhase]);
   const phaseTemplate = function (phase: number): string {
     if (phase <= 0) return '';
     const templates: Record<number, string> = {
@@ -233,8 +254,6 @@ export default function BabelPage() {
     }
     return raw;
   }
-  // Selector de idioma de despliegue, reutilizado en el encabezado de
-  // ambas vistas (Fase 0 y chat normal).
   function renderLangToggle() {
     return (
       <div className="flex items-center gap-1 text-xs text-slate-500">
@@ -256,13 +275,11 @@ export default function BabelPage() {
       </div>
     );
   }
-  // Si la sesion ya tiene fases aprobadas desde Firestore, salir del wizard
   React.useEffect(() => {
     if (session && (session.currentPhase ?? 0) > 0) {
       setIsPhase0Complete(true);
     }
   }, [session]);
-  // 4. Manejar respuesta en Fase 0 (Pregunta por pregunta)
   async function handlePhase0Answer() {
     if (!input.trim() || !uid || !session) return;
     const answer = input.trim();
@@ -278,10 +295,6 @@ export default function BabelPage() {
       const updatedAnswers = { ...phase0Answers, [questions[currentQuestionIndex].key]: answer };
       setPhase0Answers(updatedAnswers);
       if (currentQuestionIndex === questions.length - 1) {
-        // ULTIMA PREGUNTA: generar conclusion local (sin API)
-        // El resumen guardado (en Firestore y para la IA) usa el idioma de
-        // la ruta (locale). La caja en pantalla puede luego recalcularse
-        // en vivo en el idioma que el usuario elija con el selector.
         const built = buildFase0Summary(updatedAnswers, locale);
         const summaryMsg: ChatMessage = {
           role: 'user',
@@ -298,7 +311,6 @@ export default function BabelPage() {
         await saveBabelMessages(uid, cleanMessages);
         setIsPhase0Complete(true);
       } else {
-        // PREGUNTAS INTERMEDIAS: solo estado local, NO a Firestore
         const updatedMessages = [...session.messages, userMsg];
         setSession(function (prev) { return prev ? { ...prev, messages: updatedMessages } : prev; });
         const nextIndex = currentQuestionIndex + 1;
@@ -315,7 +327,6 @@ export default function BabelPage() {
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : 'Error al procesar';
       setError(errMsg);
-      // Guardar reintento solo si estabamos en la ultima pregunta
       if (currentQuestionIndex === questions.length - 1) {
         const finalAnswers = { ...phase0Answers, [questions[currentQuestionIndex].key]: input.trim() };
         const built = buildFase0Summary(finalAnswers, locale);
@@ -364,7 +375,6 @@ export default function BabelPage() {
       setSending(false);
     }
   }
-  // 5. Manejar mensajes de chat normal (Fases 1-5)
   async function sendMessage(text: string) {
     if (!uid || !session || !text.trim()) return;
     setSending(true);
@@ -379,7 +389,6 @@ export default function BabelPage() {
     setSession({ ...session, messages: historyForApi });
     const sentText = text.trim();
     setInput('');
-    // Guardar payload para reintentar
     const payload = {
       messages: historyForApi.map(function (m) { return { role: m.role, content: m.content }; }),
       language: locale,
@@ -804,6 +813,7 @@ export default function BabelPage() {
       setCurrentQuestionIndex(0);
       setPhase0Answers({});
       setIsPhase0Complete(false);
+      setTranslatedCache({});
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al reiniciar');
     } finally {
@@ -813,7 +823,6 @@ export default function BabelPage() {
   if (!session) {
     return <div className="flex min-h-screen items-center justify-center text-slate-500">{dispLang === locale ? t('loading') : UI_FALLBACK[dispLang].loading}</div>;
   }
-  // VISTA 1: WIZARD DE FASE 0 (Pregunta por pregunta)
   const isPhase0Active = currentPhase === 0 && currentQuestionIndex < questions.length && !isPhase0Complete;
   if (isPhase0Active) {
     return (
@@ -831,9 +840,6 @@ export default function BabelPage() {
             </div>
           </div>
         </div>
-        {/* Historial de respuestas previas — se reconstruye en vivo a partir
-            de las respuestas guardadas, en el idioma elegido con el selector,
-            en lugar de leer texto ya congelado. */}
         {currentQuestionIndex > 0 && (
           <Card className="flex-1 space-y-3 overflow-y-auto p-4 max-h-[40vh]">
             {Array.from({ length: currentQuestionIndex }).map(function (_unused, k) {
@@ -852,7 +858,6 @@ export default function BabelPage() {
             })}
           </Card>
         )}
-        {/* Barra de progreso */}
         <div className="w-full bg-slate-200 rounded-full h-2">
           <div className="bg-blue-600 h-2 rounded-full transition-all" style={{ width: String(((currentQuestionIndex + 1) / questions.length) * 100) + '%' }} />
         </div>
@@ -903,7 +908,6 @@ export default function BabelPage() {
             </div>
           </Card>
         )}
-        {/* Pregunta actual y formulario */}
         <Card className="p-6">
           <div className="whitespace-pre-wrap text-slate-900 mb-4 font-medium">
             {questions[currentQuestionIndex].question}
@@ -936,9 +940,6 @@ export default function BabelPage() {
       </div>
     );
   }
-  // Calculos derivados en vivo para los resumenes del formulario de
-  // Objetivos Financieros. Se recalculan en cada render (cada vez que el
-  // usuario cambia un campo), sin necesidad de un boton "confirmar".
   const finMaterialsPctLive = toAmountPct(finMaterialsValue, finMaterialsMode, finUnitPrice);
   const finLaborPctLive = toAmountPct(finLaborValue, finLaborMode, finUnitPrice);
   const finOtherPctLive = toAmountPct(finOtherValue, finOtherMode, finUnitPrice);
@@ -978,7 +979,6 @@ export default function BabelPage() {
           marketingPct: finMarketingPct / 100,
         })
       : null;
-  // VISTA 2: CHAT NORMAL (Fases 1-5 y posterior a Fase 0)
   return (
     <div className="mx-auto flex min-h-screen max-w-4xl flex-col gap-4 p-4 sm:p-6">
       <div className="flex items-center justify-between border-b pb-4">
@@ -996,14 +996,16 @@ export default function BabelPage() {
       </div>
       <Card className="flex-1 space-y-3 overflow-y-auto p-4 min-h-[60vh]">
         {session.messages.map(function (m, i) {
-          // El par de mensajes del resumen de Fase 0 (indices 0 y 1, mientras
-          // aun no se aprueba ninguna fase) se reconstruye en vivo en el
-          // idioma elegido, siempre que las respuestas sigan en memoria
-          // (no se haya recargado la pagina desde que se completo la Fase 0).
           const isFase0SummaryPair = currentPhase === 0 && i <= 1 && Object.keys(phase0Answers).length > 0;
+          const translationKey = i + '::' + dispLang;
+          const isTranslatable = m.role === 'assistant' && !isFase0SummaryPair && dispLang !== locale;
+          const hasTranslation = isTranslatable && translatedCache[translationKey] !== undefined;
+          const isTranslatingThis = isTranslatable && !hasTranslation && translatingSet.has(i);
           const displayContent = isFase0SummaryPair
             ? (i === 0 ? buildFase0Summary(phase0Answers, dispLang).userContent : buildFase0Summary(phase0Answers, dispLang).assistantContent)
-            : m.content;
+            : hasTranslation
+              ? translatedCache[translationKey]
+              : m.content;
           const isLong = displayContent.length > 300;
           const isExpanded = chatExpanded.has(i);
           return (
@@ -1028,6 +1030,11 @@ export default function BabelPage() {
                   {displayContent}
                 </div>
               )}
+              {isTranslatingThis && (
+                <div className="mt-1 text-xs italic text-slate-400">
+                  {dispLang === 'en' ? 'Translating...' : 'Traduciendo...'}
+                </div>
+              )}
               {isLong && !(editingMessageIndex === i) && (
                 <div className="mt-1 flex gap-3">
                   <button
@@ -1042,7 +1049,7 @@ export default function BabelPage() {
                   >
                     {isExpanded ? (dispLang === 'en' ? 'See less' : 'Ver menos') : (dispLang === 'en' ? 'See all' : 'Ver todo')}
                   </button>
-                  {m.role === 'assistant' && !isFase0SummaryPair && !m.content.startsWith('### Plan Estrategico Compilado') && (
+                  {m.role === 'assistant' && !isFase0SummaryPair && !hasTranslation && !m.content.startsWith('### Plan Estrategico Compilado') && (
                     <button
                       onClick={function () { handleStartEdit(i, m.content); }}
                       className="text-xs font-medium text-blue-600 hover:text-blue-800 underline underline-offset-2"
@@ -1117,7 +1124,6 @@ export default function BabelPage() {
           </div>
         </Card>
       )}
-      {/* Panel de etapas aprobadas — toggle desde link en botones de aprobación */}
       <div className="flex flex-col gap-2">
         {awaitingApproval && editingMessageIndex === null && !showManualEditor && (
           <Button onClick={function () { handleApprove(); }} disabled={sending}>
