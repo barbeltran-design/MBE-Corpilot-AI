@@ -31,6 +31,8 @@ type Accion = {
   validado: boolean;
 };
 type Contacto = { id: string; nombre: string; celular: string };
+type ExpandedMap = Record<string, boolean>;
+type OrgAssignments = Record<string, { person: string }>;
 
 const STORAGE_KEY = 'babel_plan_accion_v2';
 const CONTACTS_KEY = 'babel_plan_accion_contactos_v1';
@@ -332,9 +334,9 @@ export default function PlanAccionBuilder({ lang }: { lang: PlanLang }) {
   const [proyectos, setProyectos] = React.useState<Proyecto[]>([]);
   const [acciones, setAcciones] = React.useState<Accion[]>([]);
   const [contactos, setContactos] = React.useState<Contacto[]>([]);
-  const [expanded, setExpanded] = React.useState<Record<string, boolean>>({});
+  const [expanded, setExpanded] = React.useState<ExpandedMap>({});
   const [loaded, setLoaded] = React.useState(false);
-  const [orgAssignments, setOrgAssignments] = React.useState<Record<string, { person: string }>>({});
+  const [orgAssignments, setOrgAssignments] = React.useState<OrgAssignments>({});
   const [boardPresidente, setBoardPresidente] = React.useState('');
 
   React.useEffect(() => {
